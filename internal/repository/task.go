@@ -1,7 +1,7 @@
 package repository
 
 import (
-	"back-minijira-petproject1/models"
+	"back-minijira-petproject1/internal/models"
 	"log/slog"
 
 	"gorm.io/gorm"
