@@ -10,9 +10,9 @@ type ChatMessage struct {
 }
 
 type ChatMessageCreateReq struct {
-	UserID uint   `json:"user_id"`
-	Text   string `json:"text"`
+	UserID uint   `json:"user_id" binding:"required"`
+	Text   string `json:"text" binding:"required,min=1,max=5000"`
 
-	ChatableID   uint   `json:"chatable_id"`
-	ChatableType string `json:"chatable_type"`
+	ChatableID   uint   `json:"chatable_id" binding:"required"`
+	ChatableType string `json:"chatable_type" binding:"required,oneof=projects tasks"`
 }
