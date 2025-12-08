@@ -8,6 +8,11 @@ import (
 )
 
 type TaskRepository interface {
+	CreateTask(req models.TaskCreateReq) error
+	UpdateTask(id uint, req models.TaskUpdateReq) error
+	DeleteTask(id uint) error
+	ListTasks() ([]*models.Task, error)
+	GetTaskByID(id uint) (*models.Task, error)
 }
 
 type taskRepository struct {
@@ -39,7 +44,7 @@ func (r *taskRepository) UpdateTask(id uint, req models.TaskUpdateReq) error {
 	return nil
 }
 
-func (r *taskRepository) DeleteTask(id uint) error{
+func (r *taskRepository) DeleteTask(id uint) error {
 	res := r.db.Delete(&models.Task{}, id)
 	if res.Error != nil {
 		r.logger.Error("DeleteTask failed", "id", id, "err", res.Error)
@@ -49,9 +54,9 @@ func (r *taskRepository) DeleteTask(id uint) error{
 	return nil
 }
 
-func (r *taskRepository) ListTasks() ([]*models.Task, error){
+func (r *taskRepository) ListTasks() ([]*models.Task, error) {
 	var tasks []*models.Task
-	if err := r.db.Find(&tasks).Error; err != nil{
+	if err := r.db.Find(&tasks).Error; err != nil {
 		r.logger.Error("ListTask failed", "err", err)
 		return nil, err
 	}
@@ -59,9 +64,9 @@ func (r *taskRepository) ListTasks() ([]*models.Task, error){
 	return tasks, nil
 }
 
-func (r *taskRepository) GetTaskByID(id uint) (*models.Task, error){
-var task *models.Task
-	if err := r.db.Find(&task).Error; err != nil{
+func (r *taskRepository) GetTaskByID(id uint) (*models.Task, error) {
+	var task *models.Task
+	if err := r.db.Find(&task).Error; err != nil {
 		r.logger.Error("ListTask failed", "id", id, "err", err)
 		return nil, err
 	}

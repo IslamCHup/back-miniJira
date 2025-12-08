@@ -10,7 +10,7 @@ import (
 
 type ProjectRepository interface {
 	CreateProject(req *models.ProjectCreateReq) error
-	GetProjectByID(id uint) (models.Project, error)
+	GetProjectByID(id uint) (models.ProjectCreateResponse, error)
 	ListProjects() ([]models.ProjectCreateResponse, error)
 	UpdateProject(id uint, req models.ProjectUpdReq) error
 	DeleteProject(id uint) error
@@ -35,11 +35,11 @@ func (r *projectRepository) CreateProject(req *models.ProjectCreateReq) error {
 	return nil
 }
 
-func (r *projectRepository) GetProjectByID(id uint) (models.Project, error) {
-	var project models.Project
-	if err := r.db.First(&project, id).Error; err != nil {
+func (r *projectRepository) GetProjectByID(id uint) (models.ProjectCreateResponse, error) {
+	var project models.ProjectCreateResponse
+	if err := r.db.Model(&models.Project{}).First(&project, id).Error; err != nil {
 		r.logger.Error("GetProjectByID failed", "id", id, "err", err)
-		return models.Project{}, err
+		return models.ProjectCreateResponse{}, err
 	}
 	r.logger.Info("GetProjectByID success", "id", id)
 	return project, nil
