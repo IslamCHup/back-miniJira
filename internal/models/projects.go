@@ -9,6 +9,7 @@ type Project struct {
 	Tasks       []Task    `json:"tasks"`
 	Status      string    `json:"status"`
 	TimeEnd     time.Time `json:"time_end"`
+	ChatMessages []ChatMessage `gorm:"polymorphic:Chatable"`
 	// Comments    []Comment `json"comments"`
 	// Commands []Command `json:"command"`
 }
