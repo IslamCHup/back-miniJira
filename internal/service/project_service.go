@@ -1,8 +1,8 @@
 package service
 
 import (
-	"back-minijira-petproject1/models"
-	"back-minijira-petproject1/repository"
+	"back-minijira-petproject1/internal/models"
+	"back-minijira-petproject1/internal/repository"
 	"errors"
 	"log/slog"
 
@@ -24,7 +24,7 @@ func NewProjectService(db *gorm.DB, logger *slog.Logger, service repository.Proj
 
 func (s *projectService) Create(req *models.ProjectCreateReq) (*models.ProjectCreateResponse, error) {
 
-	if req.Title == "" || req.Description == "" || req.Status != "" {
+	if req.Title == "" || req.Description == "" || req.Status == "" {
 		s.logger.Error("передан пустой запрос",
 			"op", "service.project.Create",
 			"error", "empty req")
@@ -68,7 +68,7 @@ func (s *projectService) Create(req *models.ProjectCreateReq) (*models.ProjectCr
 func (s *projectService) ListProjects() ([]models.ProjectCreateResponse, error) {
 	projects, err := s.service.ListProjects()
 
-	if err != nil{
+	if err != nil {
 		s.logger.Error("failed get list", "err", err)
 		return nil, err
 	}
