@@ -49,20 +49,18 @@ func (s *projectService) Create(req *models.ProjectCreateReq) (*models.ProjectCr
 		return nil, err
 	}
 
-	inpReq := models.Project{
+
+	resp := models.ProjectCreateResponse{
 		Title:       req.Title,
 		Description: req.Description,
 		Status:      req.Status,
 	}
+	if req.TimeEnd != nil {
+        resp.TimeEnd = *req.TimeEnd
+    }
 
-	inpRes := models.ProjectCreateResponse{
-		Title:       inpReq.Title,
-		Description: inpReq.Description,
-		Status:      inpReq.Status,
-	}
-
-	s.logger.Info("create successful", "op", "service.project.Create", "inpRes", inpRes)
-	return &inpRes, nil
+	s.logger.Info("create successful", "op", "service.project.Create", "resp", resp)
+	return &resp, nil
 }
 
 func (s *projectService) ListProjects() ([]models.ProjectCreateResponse, error) {

@@ -2,7 +2,6 @@ package repository
 
 import (
 	"back-minijira-petproject1/internal/models"
-	"errors"
 	"log/slog"
 
 	"gorm.io/gorm"
@@ -26,7 +25,17 @@ func NewProjectRepository(db *gorm.DB, logger *slog.Logger) ProjectRepository {
 }
 
 func (r *projectRepository) CreateProject(req *models.ProjectCreateReq) error {
-	res := r.db.Create(&req)
+	project := models.Project{
+		Title:       req.Title,
+		Description: req.Description,
+		Status:      req.Status,
+	}
+
+	if req.TimeEnd != nil {
+		project.TimeEnd = *req.TimeEnd
+	}
+
+	res := r.db.Create(project)
 	if res.Error != nil {
 		r.logger.Error("create project failed", "err", res.Error)
 		return res.Error
@@ -41,26 +50,39 @@ func (r *projectRepository) GetProjectByID(id uint) (models.ProjectCreateRespons
 		r.logger.Error("GetProjectByID failed", "id", id, "err", err)
 		return models.ProjectCreateResponse{}, err
 	}
+
+	resp := models.ProjectCreateResponse{
+		Title:       project.Title,
+		Description: project.Description,
+		Status:      project.Status,
+		TimeEnd:     project.TimeEnd,
+	}
+
 	r.logger.Info("GetProjectByID success", "id", id)
-	return project, nil
+	return resp, nil
 }
 
 func (r *projectRepository) ListProjects() ([]models.ProjectCreateResponse, error) {
-	var projects []models.ProjectCreateResponse
-	res := r.db.Model(&models.Project{}).Find(&projects)
+	var projects []models.Project
+	res := r.db.Find(&projects)
 
 	if res.Error != nil {
 		r.logger.Error("ListProjects failed", "err", res.Error)
 		return nil, res.Error
 	}
+	projectResp := []models.ProjectCreateResponse{}
+	for _, v := range projects {
+		dto := models.ProjectCreateResponse{
+			Title:       v.Title,
+			Description: v.Description,
+			Status:      v.Status,
+			TimeEnd:     v.TimeEnd,
+		}
 
-	if res.RowsAffected == 0 {
-		r.logger.Error("ListProjects empty", "op", "repo.project", "rows", res.RowsAffected)
-		return nil, errors.New("ListProjects empty")
+		projectResp = append(projectResp, dto)
 	}
-
 	r.logger.Info("ListProjects success", "op", "repo.project", "count", len(projects))
-	return projects, nil
+	return projectResp, nil
 }
 
 func (r *projectRepository) UpdateProject(id uint, req models.ProjectUpdReq) error {
