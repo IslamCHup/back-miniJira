@@ -12,6 +12,7 @@ type Task struct {
 	// Comments    []Comment `json"comments"`
 	StartTask  time.Time `json:"start_task"`
 	FinishTask time.Time `json:"finish_task"`
+	ChatMessages []ChatMessage `gorm:"polymorphic:Chatable"`
 }
 
 type TaskCreateReq struct {
