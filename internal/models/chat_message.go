@@ -8,3 +8,11 @@ type ChatMessage struct {
 	ChatableID   uint   `json:"chatable_id"`
 	ChatableType string `json:"chatable_type"`
 }
+
+type ChatMessageCreateReq struct {
+	UserID uint   `json:"user_id"`
+	Text   string `json:"text"`
+
+	ChatableID   uint   `json:"chatable_id"`
+	ChatableType string `json:"chatable_type"`
+}
