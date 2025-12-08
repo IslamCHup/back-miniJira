@@ -1,8 +1,8 @@
 package service
 
 import (
-	"back-minijira-petproject1/models"
-	"back-minijira-petproject1/repository"
+	"back-minijira-petproject1/internal/models"
+	"back-minijira-petproject1/internal/repository"
 	"errors"
 	"log/slog"
 
@@ -24,7 +24,7 @@ func NewProjectService(db *gorm.DB, logger *slog.Logger, service repository.Proj
 
 func (s *projectService) Create(req *models.ProjectCreateReq) (*models.ProjectCreateResponse, error) {
 
-	if req.Title == "" || req.Description == "" || req.Status != "" {
+	if req.Title == "" || req.Description == "" || req.Status == "" {
 		s.logger.Error("передан пустой запрос",
 			"op", "service.project.Create",
 			"error", "empty req")
@@ -68,20 +68,43 @@ func (s *projectService) Create(req *models.ProjectCreateReq) (*models.ProjectCr
 func (s *projectService) ListProjects() ([]models.ProjectCreateResponse, error) {
 	projects, err := s.service.ListProjects()
 
-	if err != nil{
+	if err != nil {
 		s.logger.Error("failed get list", "err", err)
 		return nil, err
 	}
 
+	s.logger.Info("get list successful", "op", "service.project.ListProjects", "count", len(projects))
 	return projects, nil
 }
 
-// func (s *projectService) GetProjectByID(id uint) (models.Project, error){
+func (s *projectService) GetByID(id uint) (models.ProjectCreateResponse, error) {
+	project, err := s.service.GetProjectByID(id)
 
-// }
+	if err != nil {
+		s.logger.Error("failed get list", "err", err)
+		return models.ProjectCreateResponse{}, err
+	}
 
-/*CreateProject(req *models.ProjectCreateReq) error
-GetProjectByID(id uint) (models.Project, error)
-ListProjects() ([]models.Project, error)
-UpdateProject(id uint, req models.ProjectUpdReq) error
-DeleteProject(id uint) error*/
+	s.logger.Info("get project by id successful", "op", "service.project.GetByID", "id", id, "project", project)
+	return project, nil
+}
+
+func (s *projectService) Delete(id uint) error {
+	if err := s.service.DeleteProject(id); err != nil {
+		s.logger.Error("failed get list", "err", err)
+		return err
+	}
+	s.logger.Info("delete project by id successful", "op", "service.project.deleteProject")
+	return nil
+}
+
+func (s *projectService) UpdateProject(id uint, req models.ProjectUpdReq) error{
+	if err := s.service.UpdateProject(id, req); err != nil{
+		s.logger.Error("failed update project", "err", err)
+		return err
+	}
+
+	s.logger.Info("update project by id successful", "op", "service.project.updateProject", "id", id)
+	return nil
+}
+
