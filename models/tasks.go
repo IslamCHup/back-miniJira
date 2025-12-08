@@ -10,6 +10,7 @@ type Task struct {
 	ProjectID   uint   `json:"project_id"`
 	// Users       []User `json:"user" gorm:"many2many:task_users;"`
 	// Comments    []Comment `json"comments"`
+	LimitUser  int       `json:"limit"`
 	StartTask  time.Time `json:"start_task"`
 	FinishTask time.Time `json:"finish_task"`
 }
@@ -21,6 +22,7 @@ type TaskCreateReq struct {
 	ProjectID   uint   `json:"project_id"`
 	// Users       []User `json:"user" gorm:"many2many:task_users;"`
 	// Comments    []Comment `json"comments"`
+	LimitUser  int       `json:"limit"`
 	StartTask  time.Time `json:"start_task"`
 	FinishTask time.Time `json:"finish_task"`
 }
@@ -41,6 +43,7 @@ type TaskUpdateReq struct {
 	ProjectID   *uint   `json:"project_id"`
 	// Users       []*User `json:"user" gorm:"many2many:task_users;"`
 	// Comments    []*Comment `json"comments"`
+	LimitUser  *int       `json:"limit"`
 	StartTask  *time.Time `json:"start_task"`
 	FinishTask *time.Time `json:"finish_task"`
 }

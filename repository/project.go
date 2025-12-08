@@ -2,15 +2,16 @@ package repository
 
 import (
 	"back-minijira-petproject1/models"
+	"errors"
 	"log/slog"
 
 	"gorm.io/gorm"
 )
 
 type ProjectRepository interface {
-	CreateProject(req models.ProjectCreateReq) error
+	CreateProject(req *models.ProjectCreateReq) error
 	GetProjectByID(id uint) (models.Project, error)
-	ListProjects() ([]models.Project, error)
+	ListProjects() ([]models.ProjectCreateResponse, error)
 	UpdateProject(id uint, req models.ProjectUpdReq) error
 	DeleteProject(id uint) error
 }
@@ -24,7 +25,7 @@ func NewProjectRepository(db *gorm.DB, logger *slog.Logger) ProjectRepository {
 	return &projectRepository{db: db, logger: logger}
 }
 
-func (r *projectRepository) CreateProject(req models.ProjectCreateReq) error {
+func (r *projectRepository) CreateProject(req *models.ProjectCreateReq) error {
 	res := r.db.Create(&req)
 	if res.Error != nil {
 		r.logger.Error("create project failed", "err", res.Error)
@@ -44,13 +45,21 @@ func (r *projectRepository) GetProjectByID(id uint) (models.Project, error) {
 	return project, nil
 }
 
-func (r *projectRepository) ListProjects() ([]models.Project, error) {
-	var projects []models.Project
-	if err := r.db.Find(&projects).Error; err != nil {
-		r.logger.Error("ListProjects failed", "err", err)
-		return nil, err
+func (r *projectRepository) ListProjects() ([]models.ProjectCreateResponse, error) {
+	var projects []models.ProjectCreateResponse
+	res := r.db.Model(&models.Project{}).Find(&projects)
+
+	if res.Error != nil {
+		r.logger.Error("ListProjects failed", "err", res.Error)
+		return nil, res.Error
 	}
-	r.logger.Info("ListProjects success", "count", len(projects))
+
+	if res.RowsAffected == 0 {
+		r.logger.Error("ListProjects empty", "op", "repo.project", "rows", res.RowsAffected)
+		return nil, errors.New("ListProjects empty")
+	}
+
+	r.logger.Info("ListProjects success", "op", "repo.project", "count", len(projects))
 	return projects, nil
 }
 
