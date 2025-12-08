@@ -62,6 +62,13 @@ func (s *taskService) CreateTask(req models.TaskCreateReq) error{
 	s.logger.Info("create task from req successful", "op", "service.project.CreateTask")
 	return nil
 }
-/*CreateTask(req models.TaskCreateReq) error
-UpdateTask(id uint, req models.TaskUpdateReq) error
-*/
+
+func (s *taskService) UpdateTask(id uint, req models.TaskUpdateReq) error{
+	if err := s.service.UpdateTask(id, req); err != nil {
+		s.logger.Error("failed update task from req", "err", err)
+		return err
+	}
+	s.logger.Info("update task from req successful", "op", "service.project.UpdateTask")
+	return nil
+}
+

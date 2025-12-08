@@ -17,11 +17,11 @@ type TaskRepository interface {
 
 type taskRepository struct {
 	db     *gorm.DB
-	logger slog.Logger
+	logger *slog.Logger
 }
 
-func NewTaskRepository(db *gorm.DB) TaskRepository {
-	return &taskRepository{db: db}
+func NewTaskRepository(db *gorm.DB, logger *slog.Logger) TaskRepository {
+	return &taskRepository{db: db, logger: logger}
 }
 
 func (r *taskRepository) CreateTask(req models.TaskCreateReq) error {
