@@ -19,7 +19,7 @@ type ProjectCreateReq struct {
 	Description string    `json:"description"`
 	Tasks       []*Task    `json:"tasks"`
 	Status      string    `json:"status"`
-	TimeEnd     time.Time `json:"time_end"`
+	TimeEnd     *time.Time `json:"time_end"`
 	// Commands []Command `json:"command"`
 }
 
@@ -34,10 +34,10 @@ type ProjectUpdReq struct {
 }
 
 type ProjectCreateResponse struct {
-	Title       *string    `json:"title"`
-	Description *string    `json:"description"`
-	Status      *string    `json:"status"`
-	TimeEnd     *time.Time `json:"time_end"`
+	Title       string    `json:"title"`
+	Description string    `json:"description"`
+	Status      string    `json:"status"`
+	TimeEnd     time.Time `json:"time_end"`
 	// Comments    []Comment `json"comments"`
 	// Commands []Command `json:"command"`
 }
