@@ -10,6 +10,7 @@ import (
 type ChatRepository interface {
 	Create(ctx context.Context, msg *models.ChatMessage) error
 	GetByChat(ctx context.Context, chatableType string, chatableID uint) ([]models.ChatMessage, error)
+	IsUserInTask(ctx context.Context, taskID, userID uint) (bool, error)
 }
 
 type chatRepositoryGorm struct {
@@ -32,4 +33,16 @@ func (r *chatRepositoryGorm) GetByChat(ctx context.Context, chatableType string,
 		Find(&messages).Error
 
 	return messages, err
+}
+
+func (r *chatRepositoryGorm) IsUserInTask(ctx context.Context, taskID, userID uint) (bool, error) {
+	var count int64
+	err := r.db.WithContext(ctx).
+		Table("task_users").
+		Where("task_id = ? AND user_id = ?", taskID, userID).
+		Count(&count).Error
+	if err != nil {
+		return false, err
+	}
+	return count > 0, nil
 }
