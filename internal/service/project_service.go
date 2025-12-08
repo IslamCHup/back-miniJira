@@ -73,15 +73,38 @@ func (s *projectService) ListProjects() ([]models.ProjectCreateResponse, error) 
 		return nil, err
 	}
 
+	s.logger.Info("get list successful", "op", "service.project.ListProjects", "count", len(projects))
 	return projects, nil
 }
 
-// func (s *projectService) GetProjectByID(id uint) (models.Project, error){
+func (s *projectService) GetByID(id uint) (models.ProjectCreateResponse, error) {
+	project, err := s.service.GetProjectByID(id)
 
-// }
+	if err != nil {
+		s.logger.Error("failed get list", "err", err)
+		return models.ProjectCreateResponse{}, err
+	}
 
-/*CreateProject(req *models.ProjectCreateReq) error
-GetProjectByID(id uint) (models.Project, error)
-ListProjects() ([]models.Project, error)
-UpdateProject(id uint, req models.ProjectUpdReq) error
-DeleteProject(id uint) error*/
+	s.logger.Info("get project by id successful", "op", "service.project.GetByID", "id", id, "project", project)
+	return project, nil
+}
+
+func (s *projectService) Delete(id uint) error {
+	if err := s.service.DeleteProject(id); err != nil {
+		s.logger.Error("failed get list", "err", err)
+		return err
+	}
+	s.logger.Info("delete project by id successful", "op", "service.project.deleteProject")
+	return nil
+}
+
+func (s *projectService) UpdateProject(id uint, req models.ProjectUpdReq) error{
+	if err := s.service.UpdateProject(id, req); err != nil{
+		s.logger.Error("failed update project", "err", err)
+		return err
+	}
+
+	s.logger.Info("update project by id successful", "op", "service.project.updateProject", "id", id)
+	return nil
+}
+
