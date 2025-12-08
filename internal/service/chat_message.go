@@ -33,7 +33,6 @@ func NewChatService(repo repository.ChatRepository, logger *slog.Logger) ChatSer
 }
 
 func (s *chatService) AddMessage(ctx context.Context, input models.ChatMessageCreateReq) (*models.ChatMessage, error) {
-	// Валидация данных
 	if input.UserID == 0 {
 		s.logger.Warn("попытка добавить комментарий с нулевым UserID", "op", "chatService.AddMessage")
 		return nil, ErrUserIdZero

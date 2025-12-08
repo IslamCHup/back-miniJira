@@ -44,7 +44,7 @@ func (h *ChatHandler) AddMessage(c *gin.Context) {
 		return
 	}
 
-	// Проверка прав доступа: есть ли пользователь в задаче
+
 	if chatType == "tasks" {
 		hasAccess, err := h.chatService.CanUserAccessTask(c.Request.Context(), uint(chatID), input.UserID)
 		if err != nil {
