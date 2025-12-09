@@ -8,6 +8,7 @@ import (
 )
 
 type TaskRepository interface {
+	WithDB(db *gorm.DB) TaskRepository
 	CreateTask(req models.TaskCreateReq) error
 	UpdateTask(id uint, req models.TaskUpdateReq) error
 	DeleteTask(id uint) error
@@ -68,6 +69,10 @@ func (r *taskRepository) ListTasks(filter *models.TaskFilter) ([]*models.Task, e
 		Where("task_users.user_id = ?", *filter.UserID)
 	}
 
+	if filter.Priority != nil{
+		query = query.Where("priority = ?", *filter.Priority)
+	}
+
 	if filter.ProjectID != nil{
 		query = query.Where("project_id = ?", *filter.ProjectID)
 	}
@@ -102,3 +107,9 @@ func (r *taskRepository) GetTaskByID(id uint) (*models.Task, error) {
 	r.logger.Info("ListTask success", "id", id)
 	return task, nil
 }
+
+func (r *taskRepository) WithDB(db *gorm.DB) TaskRepository {
+	return &taskRepository{db:db, logger: r.logger}
+}
+
+
