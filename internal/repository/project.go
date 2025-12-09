@@ -13,6 +13,7 @@ type ProjectRepository interface {
 	ListProjects(filter *models.ProjectFilter) ([]models.ProjectCreateResponse, error)
 	UpdateProject(id uint, req models.ProjectUpdReq) error
 	DeleteProject(id uint) error
+	WithDB(db *gorm.DB) ProjectRepository
 }
 
 type projectRepository struct {
@@ -32,7 +33,7 @@ func (r *projectRepository) CreateProject(req *models.ProjectCreateReq) error {
 	}
 
 	if req.TimeEnd != nil {
-		project.TimeEnd = *req.TimeEnd
+		project.TimeEnd = req.TimeEnd
 	}
 
 	res := r.db.Create(&project)
@@ -55,7 +56,7 @@ func (r *projectRepository) GetProjectByID(id uint) (models.ProjectCreateRespons
 		Title:       project.Title,
 		Description: project.Description,
 		Status:      project.Status,
-		TimeEnd:     project.TimeEnd,
+		TimeEnd:     *project.TimeEnd,
 	}
 
 	r.logger.Info("GetProjectByID success", "id", id)
@@ -89,7 +90,7 @@ func (r *projectRepository) ListProjects(filter *models.ProjectFilter) ([]models
 			Title:       v.Title,
 			Description: v.Description,
 			Status:      v.Status,
-			TimeEnd:     v.TimeEnd,
+			TimeEnd:     *v.TimeEnd,
 		}
 
 		projectResp = append(projectResp, dto)
@@ -116,4 +117,8 @@ func (r *projectRepository) DeleteProject(id uint) error {
 	}
 	r.logger.Info("DeleteProject success", "id", id, "rows", res.RowsAffected)
 	return nil
+}
+
+func (r *projectRepository) WithDB(db *gorm.DB) ProjectRepository {
+	return &projectRepository{db: db, logger: r.logger}
 }

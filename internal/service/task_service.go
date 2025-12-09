@@ -6,6 +6,8 @@ import (
 	"errors"
 	"log/slog"
 	"slices"
+	"strings"
+	"time"
 
 	"gorm.io/gorm"
 )
@@ -19,13 +21,14 @@ type TaskService interface {
 }
 
 type taskService struct {
-	db     *gorm.DB
-	logger *slog.Logger
-	repo   repository.TaskRepository
+	db          *gorm.DB
+	logger      *slog.Logger
+	repo        repository.TaskRepository
+	projectRepo repository.ProjectRepository
 }
 
-func NewTaskService(db *gorm.DB, logger *slog.Logger, repo repository.TaskRepository) TaskService {
-	return &taskService{db: db, logger: logger, repo: repo}
+func NewTaskService(db *gorm.DB, logger *slog.Logger, repo repository.TaskRepository, projectRepo repository.ProjectRepository) TaskService {
+	return &taskService{db: db, logger: logger, repo: repo, projectRepo: projectRepo}
 }
 
 func (s *taskService) GetTaskByID(id uint) (*models.TaskResponse, error) {
@@ -84,6 +87,7 @@ func (s *taskService) CreateTask(req models.TaskCreateReq) error {
 func (s *taskService) UpdateTask(id uint, req models.TaskUpdateReq) error {
 	return s.db.Transaction(func(tx *gorm.DB) error {
 		taskrepo := s.repo.WithDB(tx)
+		projectRepo := s.projectRepo.WithDB(tx)
 		task, err := taskrepo.GetTaskByID(id)
 
 		if err != nil {
@@ -98,21 +102,20 @@ func (s *taskService) UpdateTask(id uint, req models.TaskUpdateReq) error {
 			"done":        {"in_progress"},
 		}
 
-		if req.Status == nil {
-			s.logger.Error("such status does not exist", "task_status_current", task.Status)
-			return errors.New("the task status changes only in a certain order")
-		}
+		oldStatusTask := strings.ToLower(task.Status)
+		var newStatusTask string
+		if req.Status != nil {
+			newStatusTask = strings.ToLower(*req.Status)
+			statusSlice, ok := allowedTransport[oldStatusTask]
+			if !ok {
+				s.logger.Error("such status does not exist", "task_status_current", task.Status)
+				return errors.New("the task status changes only in a certain order")
+			}
 
-		statusSlice, ok := allowedTransport[task.Status]
-
-		if !ok {
-			s.logger.Error("such status does not exist", "task_status_current", task.Status)
-			return errors.New("the task status changes only in a certain order")
-		}
-
-		if !slices.Contains(statusSlice, *req.Status) {
-			s.logger.Error("can't skip status", "task_status_current", task.Status, "req_tas_status", req.Status)
-			return errors.New("the task status changes only in a certain order")
+			if !slices.Contains(statusSlice, newStatusTask) {
+				s.logger.Error("can't skip status", "task_status_current", task.Status, "req_tas_status", req.Status)
+				return errors.New("the task status changes only in a certain order")
+			}
 		}
 
 		if req.Users != nil && task.LimitUser < len(req.Users) {
@@ -120,10 +123,37 @@ func (s *taskService) UpdateTask(id uint, req models.TaskUpdateReq) error {
 			return errors.New("the number of users exceeds the allowed limit")
 		}
 
-		if err := taskrepo.UpdateTask(id, req); err != nil {
+		reqLocal := req
+		if reqLocal.Status != nil &&
+			strings.EqualFold(newStatusTask, "done") &&
+			!strings.EqualFold(oldStatusTask, "done") {
+			now := time.Now()
+			reqLocal.FinishTask = &now
+		}
+
+		if err := taskrepo.UpdateTask(task.ID, reqLocal); err != nil {
 			s.logger.Error("failed update task from req", "err", err)
 			return err
 		}
+
+		statusDone := "done"
+		countWithStatus, err := taskrepo.CountTasksByStatusByProjectID(*reqLocal.ProjectID,
+			task.ID, statusDone)
+
+		if err != nil {
+			s.logger.Error("failed to count the quantity", "err", err)
+			return err
+		}
+
+		changeStatusProject := models.ProjectUpdReq{
+			Status: &statusDone,
+		}
+
+		if *countWithStatus == 0 {
+			projectRepo.UpdateProject(task.ProjectID, changeStatusProject)
+			s.logger.Info("project closed (all tasks done)", "project_id", task.ProjectID)
+		}
+
 		s.logger.Info("update task from req successful", "op", "service.project.UpdateTask")
 		return nil
 	})

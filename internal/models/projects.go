@@ -8,7 +8,7 @@ type Project struct {
 	Description  string        `json:"description"`
 	Tasks        []Task        `json:"tasks"`
 	Status       string        `json:"status"`
-	TimeEnd      time.Time     `json:"time_end"`
+	TimeEnd      *time.Time     `json:"time_end"`
 	ChatMessages []ChatMessage `gorm:"polymorphic:Chatable"`
 	// Commands []Command `json:"command"`
 }

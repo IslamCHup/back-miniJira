@@ -54,6 +54,8 @@ type TaskFilter struct {
 	ProjectID *uint
 	Search    *string
 	Priority  *int
+	SortBy    *string
+	SortOrder *string
 	Limit     int
 	Offset    int
 }
