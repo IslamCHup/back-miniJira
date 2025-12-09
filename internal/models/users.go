@@ -3,9 +3,12 @@ package models
 type User struct {
 	Base
 	FullName     string `json:"full_name"`
+	Email        string `json:"email"`
 	PasswordHash string `json:"-"`
 	Tasks        []Task `gorm:"many2many:user_tasks;" json:"-"`
 	IsAdmin      bool   `json:"is_admin"`
+	IsVerified   bool   `json:"is_verified"`
+	VerifyToken  string `json"-"`
 }
 
 type UserCreateReq struct {
@@ -21,6 +24,7 @@ type UserUpdateReq struct {
 type UserResponse struct {
 	ID       uint   `json:"id"`
 	FullName string `json:"full_name"`
+	Email    string `json:"email"`
 	IsAdmin  bool   `json:"is_admin"`
 	TaskIDs  []uint `json:"task_ids"`
 }
