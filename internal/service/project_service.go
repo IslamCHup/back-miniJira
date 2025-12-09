@@ -11,7 +11,7 @@ import (
 
 type ProjectService interface {
 	Create(req *models.ProjectCreateReq) (*models.ProjectCreateResponse, error)
-	ListProjects() ([]models.ProjectCreateResponse, error)
+	ListProjects(filter *models.ProjectFilter) ([]models.ProjectCreateResponse, error)
 	GetByID(id uint) (models.ProjectCreateResponse, error)
 	Delete(id uint) error
 	UpdateProject(id uint, req models.ProjectUpdReq) error
@@ -67,8 +67,8 @@ func (s *projectService) Create(req *models.ProjectCreateReq) (*models.ProjectCr
 	return &resp, nil
 }
 
-func (s *projectService) ListProjects() ([]models.ProjectCreateResponse, error) {
-	projects, err := s.repo.ListProjects()
+func (s *projectService) ListProjects(filter *models.ProjectFilter) ([]models.ProjectCreateResponse, error) {
+	projects, err := s.repo.ListProjects(filter)
 
 	if err != nil {
 		s.logger.Error("failed get list", "err", err)

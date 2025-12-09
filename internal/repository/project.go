@@ -10,9 +10,10 @@ import (
 type ProjectRepository interface {
 	CreateProject(req *models.ProjectCreateReq) error
 	GetProjectByID(id uint) (models.ProjectCreateResponse, error)
-	ListProjects() ([]models.ProjectCreateResponse, error)
+	ListProjects(filter *models.ProjectFilter) ([]models.ProjectCreateResponse, error)
 	UpdateProject(id uint, req models.ProjectUpdReq) error
 	DeleteProject(id uint) error
+	WithDB(db *gorm.DB) ProjectRepository
 }
 
 type projectRepository struct {
@@ -32,10 +33,10 @@ func (r *projectRepository) CreateProject(req *models.ProjectCreateReq) error {
 	}
 
 	if req.TimeEnd != nil {
-		project.TimeEnd = *req.TimeEnd
+		project.TimeEnd = req.TimeEnd
 	}
 
-	res := r.db.Create(project)
+	res := r.db.Create(&project)
 	if res.Error != nil {
 		r.logger.Error("create project failed", "err", res.Error)
 		return res.Error
@@ -45,8 +46,8 @@ func (r *projectRepository) CreateProject(req *models.ProjectCreateReq) error {
 }
 
 func (r *projectRepository) GetProjectByID(id uint) (models.ProjectCreateResponse, error) {
-	var project models.ProjectCreateResponse
-	if err := r.db.Model(&models.Project{}).First(&project, id).Error; err != nil {
+	var project models.Project
+	if err := r.db.First(&project, id).Error; err != nil {
 		r.logger.Error("GetProjectByID failed", "id", id, "err", err)
 		return models.ProjectCreateResponse{}, err
 	}
@@ -55,16 +56,29 @@ func (r *projectRepository) GetProjectByID(id uint) (models.ProjectCreateRespons
 		Title:       project.Title,
 		Description: project.Description,
 		Status:      project.Status,
-		TimeEnd:     project.TimeEnd,
+		TimeEnd:     *project.TimeEnd,
 	}
 
 	r.logger.Info("GetProjectByID success", "id", id)
 	return resp, nil
 }
 
-func (r *projectRepository) ListProjects() ([]models.ProjectCreateResponse, error) {
+func (r *projectRepository) ListProjects(filter *models.ProjectFilter) ([]models.ProjectCreateResponse, error) {
 	var projects []models.Project
-	res := r.db.Find(&projects)
+	query := r.db.Model(models.Project{})
+	if filter.Title != "" {
+		query = query.Where("title = ?", filter.Title)
+	}
+	if filter.Status != "" {
+		query = query.Where("status = ?", filter.Status)
+	}
+	if filter.Limit > 0 {
+		query = query.Limit(filter.Limit)
+	}
+	if filter.Offset > 0 {
+		query = query.Offset(filter.Offset)
+	}
+	res := query.Find(&projects)
 
 	if res.Error != nil {
 		r.logger.Error("ListProjects failed", "err", res.Error)
@@ -76,7 +90,7 @@ func (r *projectRepository) ListProjects() ([]models.ProjectCreateResponse, erro
 			Title:       v.Title,
 			Description: v.Description,
 			Status:      v.Status,
-			TimeEnd:     v.TimeEnd,
+			TimeEnd:     *v.TimeEnd,
 		}
 
 		projectResp = append(projectResp, dto)
@@ -103,4 +117,8 @@ func (r *projectRepository) DeleteProject(id uint) error {
 	}
 	r.logger.Info("DeleteProject success", "id", id, "rows", res.RowsAffected)
 	return nil
+}
+
+func (r *projectRepository) WithDB(db *gorm.DB) ProjectRepository {
+	return &projectRepository{db: db, logger: r.logger}
 }

@@ -3,16 +3,19 @@ package repository
 import (
 	"back-minijira-petproject1/internal/models"
 	"log/slog"
+	"strings"
 
 	"gorm.io/gorm"
 )
 
 type TaskRepository interface {
+	WithDB(db *gorm.DB) TaskRepository
 	CreateTask(req models.TaskCreateReq) error
 	UpdateTask(id uint, req models.TaskUpdateReq) error
 	DeleteTask(id uint) error
-	ListTasks(filter *models.TaskFilter) ([]*models.Task, error) 
+	ListTasks(filter *models.TaskFilter) ([]*models.Task, error)
 	GetTaskByID(id uint) (*models.Task, error)
+	CountTasksByStatusByProjectID(project_id uint, task_id uint, status string) (*int64, error)
 }
 
 type taskRepository struct {
@@ -35,7 +38,7 @@ func (r *taskRepository) CreateTask(req models.TaskCreateReq) error {
 }
 
 func (r *taskRepository) UpdateTask(id uint, req models.TaskUpdateReq) error {
-	res := r.db.Model(&models.Task{}).Where("id = ?", id).Updates(&req)
+	res := r.db.Model(&models.Task{}).Where("id = ?", id).Omit("Users").Updates(req)
 	if res.Error != nil {
 		r.logger.Error("UpdateTask failed", "id", id, "err", res.Error)
 		return res.Error
@@ -59,22 +62,48 @@ func (r *taskRepository) ListTasks(filter *models.TaskFilter) ([]*models.Task, e
 
 	query := r.db.Model(&models.Task{})
 
-	if filter.Status != nil{
+	if filter.Status != nil {
 		query = query.Where("status = ?", *filter.Status)
 	}
 
-	if filter.UserID != nil{
+	if filter.UserID != nil {
 		query = query.Joins("JOIN task_users ON task_users.task_id = tasks.id").
-		Where("task_users.user_id = ?", *filter.UserID)
+			Where("task_users.user_id = ?", *filter.UserID)
 	}
 
-	if filter.ProjectID != nil{
+	if filter.Priority != nil {
+		query = query.Where("priority = ?", *filter.Priority)
+	}
+
+	if filter.ProjectID != nil {
 		query = query.Where("project_id = ?", *filter.ProjectID)
 	}
 
-	if filter.Search != nil{
+	if filter.Search != nil {
 		search := "%" + *filter.Search + "%"
 		query = query.Where("title ILIKE ? OR description ILIKE ?", search, search)
+	}
+
+	sortField := "priority"
+	sortOrder := "DESC"
+	if filter != nil && filter.SortBy != nil && *filter.SortBy != "" {
+		switch strings.ToLower(*filter.SortBy) {
+		case "priority":
+			sortField = "priority"
+		case "created_at":
+			sortField = "created_at"
+		case "start_task":
+			sortField = "start_task"
+		default:
+			sortField = "priority"
+		}
+	}
+
+	orderClause := sortField + " " + sortOrder + ", created_at DESC"
+	query = query.Order(orderClause)
+
+	if filter != nil && filter.SortOrder != nil && strings.ToLower(*filter.SortOrder) == "asc" {
+		sortOrder = "ASC"
 	}
 
 	if filter.Limit > 0 {
@@ -94,11 +123,26 @@ func (r *taskRepository) ListTasks(filter *models.TaskFilter) ([]*models.Task, e
 }
 
 func (r *taskRepository) GetTaskByID(id uint) (*models.Task, error) {
-	var task *models.Task
+	var task models.Task
 	if err := r.db.Find(&task).Error; err != nil {
 		r.logger.Error("ListTask failed", "id", id, "err", err)
 		return nil, err
 	}
 	r.logger.Info("ListTask success", "id", id)
-	return task, nil
+	return &task, nil
+}
+
+func (r *taskRepository) WithDB(db *gorm.DB) TaskRepository {
+	return &taskRepository{db: db, logger: r.logger}
+}
+
+func (r *taskRepository) CountTasksByStatusByProjectID(project_id uint, task_id uint, status string) (*int64, error) {
+	var hasThisStatus int64
+	if err := r.db.Model(&models.Task{}).Where("project_id = ? AND task_id <> ? AND (status IS NULL OR LOWER(status) <>?)",
+		project_id, task_id, status).Count(&hasThisStatus).Error; err != nil {
+		r.logger.Error("CountTasksByStatusByProjectID failed", "project_id", project_id, "task_id", task_id, "err", err)
+		return nil, err
+	}
+
+	return &hasThisStatus, nil
 }
