@@ -24,7 +24,7 @@ func NewAuthService(repo repository.UserRepository, logger *slog.Logger) *AuthSe
 }
 
 func (s *AuthService) Register(req models.RegisterRequest) error {
-	if exisiting, err := s.repo.GetUserByEmail(req.Email); err != nil && exisiting.ID != 0 {
+	if exisiting, _ := s.repo.GetUserByEmail(req.Email); exisiting.ID != 0 {
 		return errors.New("пользователь с таким емайлом уже есть")
 
 	}

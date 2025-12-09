@@ -18,20 +18,22 @@ func main() {
 
 	db := config.SetUpDatabaseConnection(logger)
 
-	if err := db.AutoMigrate(&models.Project{}, &models.Task{},&models.User{}); err != nil {
+	if err := db.AutoMigrate(&models.Project{}, &models.Task{}, &models.User{}); err != nil {
 		logger.Error("ошибка при выполнении автомиграции", "error", err)
 		panic(fmt.Sprintf("не удалось выполнит миграции:%v", err))
 	}
 
 	projectRepo := repository.NewProjectRepository(db, logger)
 	taskRepo := repository.NewTaskRepository(db, logger)
-	userRepo := repository.NewUserRepository(db,logger)
+	userRepo := repository.NewUserRepository(db, logger)
 
 	projectService := service.NewProjectService(db, logger, projectRepo)
 	taskService := service.NewTaskService(db, logger, taskRepo)
-	userService := service.NewUserService(userRepo,db,logger)
+	userService := service.NewUserService(userRepo, db, logger)
+	authService := service.NewAuthService(userRepo, logger)
 
-	userHandler := transport.NewUserHandler(userService,logger)
+	userHandler := transport.NewUserHandler(userService, logger)
+	authHandler := transport.NewAuthHandler(authService, logger)
 
 	fmt.Println(projectService, taskService)
 
@@ -41,25 +43,32 @@ func main() {
 		c.JSON(200, gin.H{"status": "ok"})
 	})
 
+	auth := r.Group("/auth")
+	{
+		auth.POST("/register", authHandler.Register)
+		auth.POST("/login", authHandler.Login)
+		auth.GET("/verify", authHandler.VerifyEmail)
+	}
+
 	users := r.Group("/users")
 	{
-		users.POST("/", userHandler.CreateUser) 
+		users.POST("/", userHandler.CreateUser)
 	}
 
 	authUsers := r.Group("/users")
-	authUsers.Use(middleware.AuthMiddleware(&userRepo))
+	authUsers.Use(middleware.AuthMiddleware(userRepo))
 	{
 		authUsers.GET("/:id", userHandler.GetUserByID)
 		authUsers.PATCH("/:id", userHandler.UpdateUser)
 	}
 
 	adminUsers := r.Group("/admin/users")
-	adminUsers.Use(middleware.AuthMiddleware(&userRepo), middleware.RequireAdmin())
+	adminUsers.Use(middleware.AuthMiddleware(userRepo), middleware.RequireAdmin())
 	{
 		adminUsers.DELETE("/:id", userHandler.DeleteUser)
 	}
 
 	logger.Info("Server running on :8080")
 
-	r.Run()
+	r.Run(":8080")
 }
