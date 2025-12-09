@@ -10,13 +10,11 @@ type User struct {
 type UserCreateReq struct {
 	FullName string `json:"full_name" binding:"required"`
 	TaskIDs  []uint `json:"task_ids"`
-	IsAdmin  bool   `json:"is_admin" binding:"required"`
 }
 
 type UserUpdateReq struct {
 	FullName *string `json:"full_name"`
 	TaskIDs  []uint  `json:"task_ids"`
-	IsAdmin  *bool   `json:"is_admin"`
 }
 
 type UserResponse struct {
