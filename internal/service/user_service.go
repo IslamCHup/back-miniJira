@@ -10,21 +10,29 @@ import (
 	"gorm.io/gorm"
 )
 
-type UserService struct {
+type UserService interface {
+	CreateUser(req models.UserCreateReq) (models.UserResponse, error)
+	GetUserByID(id uint) (models.UserResponse, error)
+	UpdateUser(id uint, req models.UserUpdateReq, currentUser models.User) error
+	checkUserPermission(currentUser, targetUser models.User) error
+	DeleteUser(id uint, currentUser models.User) error
+}
+
+type userService struct {
 	repo   repository.UserRepository
 	db     *gorm.DB
 	logger *slog.Logger
 }
 
-func NewUserService(repo repository.UserRepository, db *gorm.DB, logger *slog.Logger) *UserService {
-	return &UserService{
+func NewUserService(repo repository.UserRepository, db *gorm.DB, logger *slog.Logger) UserService {
+	return &userService{
 		repo:   repo,
 		db:     db,
 		logger: logger,
 	}
 }
 
-func (s *UserService) CreateUser(req models.UserCreateReq) (models.UserResponse, error) {
+func (s *userService) CreateUser(req models.UserCreateReq) (models.UserResponse, error) {
 	s.logger.Info("CreateUser called", "full_name", req.FullName)
 
 	user := models.User{
@@ -35,7 +43,7 @@ func (s *UserService) CreateUser(req models.UserCreateReq) (models.UserResponse,
 		return models.UserResponse{}, err
 	}
 
-	if err := s.assignTasksToUser(&user, req.TaskIDs); err != nil {
+	if err := s.repo.AssignTasksToUser(&user, req.TaskIDs); err != nil {
 		return models.UserResponse{}, err
 	}
 
@@ -54,7 +62,7 @@ func (s *UserService) CreateUser(req models.UserCreateReq) (models.UserResponse,
 	}, nil
 }
 
-func (s *UserService) GetUserByID(id uint) (models.UserResponse, error) {
+func (s *userService) GetUserByID(id uint) (models.UserResponse, error) {
 	s.logger.Info("GetUserByID called", "id", id)
 
 	user, taskIDs, err := s.repo.GetUserByID(id)
@@ -73,7 +81,7 @@ func (s *UserService) GetUserByID(id uint) (models.UserResponse, error) {
 	}, nil
 }
 
-func (s *UserService) UpdateUser(id uint, req models.UserUpdateReq, currentUser models.User) error {
+func (s *userService) UpdateUser(id uint, req models.UserUpdateReq, currentUser models.User) error {
 	user, _, err := s.repo.GetUserByID(id)
 	if err != nil {
 		return err
@@ -91,7 +99,7 @@ func (s *UserService) UpdateUser(id uint, req models.UserUpdateReq, currentUser 
 	}
 
 	if req.TaskIDs != nil {
-		if err := s.assignTasksToUser(&user, req.TaskIDs); err != nil {
+		if err := s.repo.AssignTasksToUser(&user, req.TaskIDs); err != nil {
 			return err
 		}
 	}
@@ -99,28 +107,7 @@ func (s *UserService) UpdateUser(id uint, req models.UserUpdateReq, currentUser 
 	return s.repo.UpdateUser(&user)
 }
 
-func (s *UserService) assignTasksToUser(user *models.User, taskIDs []uint) error {
-	if len(taskIDs) == 0 {
-		return nil
-	}
-
-	s.logger.Info("assignTasksToUser called", "user_id", user.ID, "task_ids", taskIDs)
-
-	var tasks []models.Task
-	if err := s.db.Where("id IN ?", taskIDs).Find(&tasks).Error; err != nil {
-		s.logger.Error("assignTasksToUser: invalid task IDs", "error", err)
-		return errors.New("invalid task IDs")
-	}
-
-	if err := s.db.Model(user).Association("Tasks").Replace(tasks); err != nil {
-		s.logger.Error("assignTasksToUser: failed replacing tasks", "error", err)
-		return err
-	}
-
-	return nil
-}
-
-func (s *UserService) checkUserPermission(currentUser, targetUser models.User) error {
+func (s *userService) checkUserPermission(currentUser, targetUser models.User) error {
 	if currentUser.ID != targetUser.ID && !currentUser.IsAdmin {
 		s.logger.Warn("permission denied",
 			"current_user_id", currentUser.ID,
@@ -132,7 +119,7 @@ func (s *UserService) checkUserPermission(currentUser, targetUser models.User) e
 	return nil
 }
 
-func (s *UserService) DeleteUser(id uint, currentUser models.User) error {
+func (s *userService) DeleteUser(id uint, currentUser models.User) error {
 	s.logger.Info("DeleteUser called", "target_id", id, "by_user", currentUser.ID)
 
 	user, _, err := s.repo.GetUserByID(id)

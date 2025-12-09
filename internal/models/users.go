@@ -2,9 +2,10 @@ package models
 
 type User struct {
 	Base
-	FullName string `json:"full_name"`
-	Tasks    []Task `gorm:"many2many:user_tasks;" json:"-"`
-	IsAdmin  bool   `json:"is_admin"`
+	FullName     string `json:"full_name"`
+	PasswordHash string `json:"-"`
+	Tasks        []Task `gorm:"many2many:user_tasks;" json:"-"`
+	IsAdmin      bool   `json:"is_admin"`
 }
 
 type UserCreateReq struct {
