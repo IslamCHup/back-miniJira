@@ -140,3 +140,4 @@ func (s *userService) DeleteUser(id uint, currentUser models.User) error {
 	s.logger.Info("DeleteUser success", "id", id)
 	return nil
 }
+

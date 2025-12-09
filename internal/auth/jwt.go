@@ -2,12 +2,13 @@ package auth
 
 import (
 	"errors"
+	"os"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
 )
 
-var jwtSecret = []byte("SUPER_SECRET_KEY")
+var jwtSecret = []byte(os.Getenv("JWT_SECRET"))
 
 type JWTClaims struct {
 	UserID  uint `json:"user_id"`

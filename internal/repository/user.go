@@ -14,7 +14,11 @@ type UserRepository interface {
 	UpdateUser(req *models.User) error
 	DeleteUser(id uint) error
 	AssignTasksToUser(user *models.User, taskIDs []uint) error
+	GetUserByEmail(email string) (models.User, error)
+	GetUserVerifyToken(token string) (models.User, error)
+	UpdateUserVerification(id uint, isVerified bool, token string) error
 }
+
 
 type userRepository struct {
 	db     *gorm.DB
@@ -91,4 +95,34 @@ func (r *userRepository) AssignTasksToUser(user *models.User, taskIDs []uint) er
 	}
 
 	return nil
+}
+
+func (r *userRepository) GetUserByEmail(email string) (models.User, error) {
+	var user models.User
+
+	if err := r.db.Where("email = ?", email).First(&user).Error; err != nil {
+		r.logger.Error("Поиск по емайлу не удался", "email", email, "error", err)
+		return models.User{}, err
+	}
+
+	return user, nil
+}
+
+func (r *userRepository) GetUserVerifyToken(token string) (models.User, error) {
+	var user models.User
+
+	if err := r.db.Where("verify_token = ?", token).First(&user).Error; err != nil {
+		r.logger.Error("")
+		return models.User{}, nil
+	}
+	return user, nil
+}
+
+func (r *userRepository) UpdateUserVerification(id uint, isVerified bool, token string) error {
+	return r.db.Model(&models.User{}).
+		Where("id = ?", id).
+		Updates(map[string]any{
+			"is_verified":  isVerified,
+			"verify_token": token,
+		}).Error
 }
