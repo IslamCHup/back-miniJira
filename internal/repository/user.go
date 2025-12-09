@@ -2,6 +2,7 @@ package repository
 
 import (
 	"back-minijira-petproject1/internal/models"
+	"errors"
 	"log/slog"
 
 	"gorm.io/gorm"
@@ -12,6 +13,7 @@ type UserRepository interface {
 	GetUserByID(id uint) (models.User, []uint, error)
 	UpdateUser(req *models.User) error
 	DeleteUser(id uint) error
+	AssignTasksToUser(user *models.User, taskIDs []uint) error
 }
 
 type userRepository struct {
@@ -28,7 +30,7 @@ func (r *userRepository) CreateUser(req *models.User) error {
 		r.logger.Error("failed to create user", "error", err)
 		return err
 	}
-	r.logger.Info("user created","id",req.ID)
+	r.logger.Info("user created", "id", req.ID)
 	return nil
 }
 
@@ -67,5 +69,26 @@ func (r *userRepository) DeleteUser(id uint) error {
 		return res.Error
 	}
 	r.logger.Info("DeleteUser success", "id", id, "rows", res.RowsAffected)
+	return nil
+}
+
+func (r *userRepository) AssignTasksToUser(user *models.User, taskIDs []uint) error {
+	if len(taskIDs) == 0 {
+		return nil
+	}
+
+	r.logger.Info("assignTasksToUser called", "user_id", user.ID, "task_ids", taskIDs)
+
+	var tasks []models.Task
+	if err := r.db.Where("id IN ?", taskIDs).Find(&tasks).Error; err != nil {
+		r.logger.Error("assignTasksToUser: invalid task IDs", "error", err)
+		return errors.New("некорректное айди")
+	}
+
+	if err := r.db.Model(user).Association("Tasks").Replace(tasks); err != nil {
+		r.logger.Error("assignTasksToUser: failed replacing tasks", "error", err)
+		return err
+	}
+
 	return nil
 }
