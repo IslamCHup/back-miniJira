@@ -11,7 +11,7 @@ type TaskRepository interface {
 	CreateTask(req models.TaskCreateReq) error
 	UpdateTask(id uint, req models.TaskUpdateReq) error
 	DeleteTask(id uint) error
-	ListTasks() ([]*models.Task, error)
+	ListTasks(filter *models.TaskFilter) ([]*models.Task, error) 
 	GetTaskByID(id uint) (*models.Task, error)
 }
 
@@ -54,9 +54,38 @@ func (r *taskRepository) DeleteTask(id uint) error {
 	return nil
 }
 
-func (r *taskRepository) ListTasks() ([]*models.Task, error) {
+func (r *taskRepository) ListTasks(filter *models.TaskFilter) ([]*models.Task, error) {
 	var tasks []*models.Task
-	if err := r.db.Find(&tasks).Error; err != nil {
+
+	query := r.db.Model(&models.Task{})
+
+	if filter.Status != nil{
+		query = query.Where("status = ?", *filter.Status)
+	}
+
+	if filter.UserID != nil{
+		query = query.Joins("JOIN task_users ON task_users.task_id = tasks.id").
+		Where("task_users.user_id = ?", *filter.UserID)
+	}
+
+	if filter.ProjectID != nil{
+		query = query.Where("project_id = ?", *filter.ProjectID)
+	}
+
+	if filter.Search != nil{
+		search := "%" + *filter.Search + "%"
+		query = query.Where("title ILIKE ? OR description ILIKE ?", search, search)
+	}
+
+	if filter.Limit > 0 {
+		query = query.Limit(filter.Limit)
+	}
+
+	if filter.Offset > 0 {
+		query = query.Offset(filter.Offset)
+	}
+
+	if err := query.Find(&tasks).Error; err != nil {
 		r.logger.Error("ListTask failed", "err", err)
 		return nil, err
 	}

@@ -9,20 +9,25 @@ import (
 )
 
 type TaskService interface {
+	GetTaskByID(id uint) (*models.Task, error)
+	ListTasks(filter *models.TaskFilter) ([]*models.Task, error)
+	DeleteTask(id uint) error
+	CreateTask(req models.TaskCreateReq) error
+	UpdateTask(id uint, req models.TaskUpdateReq) error
 }
 
 type taskService struct {
-	db      *gorm.DB
-	logger  *slog.Logger
-	service repository.TaskRepository
+	db     *gorm.DB
+	logger *slog.Logger
+	repo   repository.TaskRepository
 }
 
-func NewTaskService(db *gorm.DB, logger *slog.Logger, service repository.TaskRepository) TaskService {
-	return &taskService{db: db, logger: logger, service: service}
+func NewTaskService(db *gorm.DB, logger *slog.Logger, repo repository.TaskRepository) TaskService {
+	return &taskService{db: db, logger: logger, repo: repo}
 }
 
 func (s *taskService) GetTaskByID(id uint) (*models.Task, error) {
-	task, err := s.service.GetTaskByID(id)
+	task, err := s.repo.GetTaskByID(id)
 	if err != nil {
 		s.logger.Error("передан пустой запрос",
 			"op", "service.task.GetTaskByID",
@@ -33,8 +38,8 @@ func (s *taskService) GetTaskByID(id uint) (*models.Task, error) {
 	return task, nil
 }
 
-func (s *taskService) ListTasks() ([]*models.Task, error) {
-	tasks, err := s.service.ListTasks()
+func (s *taskService) ListTasks(filter *models.TaskFilter) ([]*models.Task, error) {
+	tasks, err := s.repo.ListTasks(filter)
 	if err != nil {
 		s.logger.Error("передан пустой запрос",
 			"op", "service.task.ListTasks",
@@ -46,7 +51,7 @@ func (s *taskService) ListTasks() ([]*models.Task, error) {
 }
 
 func (s *taskService) DeleteTask(id uint) error {
-	if err := s.service.DeleteTask(id); err != nil {
+	if err := s.repo.DeleteTask(id); err != nil {
 		s.logger.Error("failed delete task by id", "id", id, "err", err)
 		return err
 	}
@@ -54,8 +59,8 @@ func (s *taskService) DeleteTask(id uint) error {
 	return nil
 }
 
-func (s *taskService) CreateTask(req models.TaskCreateReq) error{
-	if err := s.service.CreateTask(req); err != nil {
+func (s *taskService) CreateTask(req models.TaskCreateReq) error {
+	if err := s.repo.CreateTask(req); err != nil {
 		s.logger.Error("failed create task from req", "err", err)
 		return err
 	}
@@ -63,12 +68,12 @@ func (s *taskService) CreateTask(req models.TaskCreateReq) error{
 	return nil
 }
 
-func (s *taskService) UpdateTask(id uint, req models.TaskUpdateReq) error{
-	if err := s.service.UpdateTask(id, req); err != nil {
+func (s *taskService) UpdateTask(id uint, req models.TaskUpdateReq) error {
+
+	if err := s.repo.UpdateTask(id, req); err != nil {
 		s.logger.Error("failed update task from req", "err", err)
 		return err
 	}
 	s.logger.Info("update task from req successful", "op", "service.project.UpdateTask")
 	return nil
 }
-

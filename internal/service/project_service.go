@@ -10,16 +10,21 @@ import (
 )
 
 type ProjectService interface {
+	Create(req *models.ProjectCreateReq) (*models.ProjectCreateResponse, error)
+	ListProjects() ([]models.ProjectCreateResponse, error)
+	GetByID(id uint) (models.ProjectCreateResponse, error)
+	Delete(id uint) error
+	UpdateProject(id uint, req models.ProjectUpdReq) error
 }
 
 type projectService struct {
-	db      *gorm.DB
-	logger  *slog.Logger
-	service repository.ProjectRepository
+	db     *gorm.DB
+	logger *slog.Logger
+	repo   repository.ProjectRepository
 }
 
-func NewProjectService(db *gorm.DB, logger *slog.Logger, service repository.ProjectRepository) ProjectService {
-	return &projectService{db: db, logger: logger, service: service}
+func NewProjectService(db *gorm.DB, logger *slog.Logger, repo repository.ProjectRepository) ProjectService {
+	return &projectService{db: db, logger: logger, repo: repo}
 }
 
 func (s *projectService) Create(req *models.ProjectCreateReq) (*models.ProjectCreateResponse, error) {
@@ -44,11 +49,10 @@ func (s *projectService) Create(req *models.ProjectCreateReq) (*models.ProjectCr
 		return nil, errors.New("invalid status")
 	}
 
-	if err := s.service.CreateProject(req); err != nil {
+	if err := s.repo.CreateProject(req); err != nil {
 		s.logger.Error("create failed", "err", err)
 		return nil, err
 	}
-
 
 	resp := models.ProjectCreateResponse{
 		Title:       req.Title,
@@ -56,15 +60,15 @@ func (s *projectService) Create(req *models.ProjectCreateReq) (*models.ProjectCr
 		Status:      req.Status,
 	}
 	if req.TimeEnd != nil {
-        resp.TimeEnd = *req.TimeEnd
-    }
+		resp.TimeEnd = *req.TimeEnd
+	}
 
 	s.logger.Info("create successful", "op", "service.project.Create", "resp", resp)
 	return &resp, nil
 }
 
 func (s *projectService) ListProjects() ([]models.ProjectCreateResponse, error) {
-	projects, err := s.service.ListProjects()
+	projects, err := s.repo.ListProjects()
 
 	if err != nil {
 		s.logger.Error("failed get list", "err", err)
@@ -76,7 +80,7 @@ func (s *projectService) ListProjects() ([]models.ProjectCreateResponse, error) 
 }
 
 func (s *projectService) GetByID(id uint) (models.ProjectCreateResponse, error) {
-	project, err := s.service.GetProjectByID(id)
+	project, err := s.repo.GetProjectByID(id)
 
 	if err != nil {
 		s.logger.Error("failed get list", "err", err)
@@ -88,7 +92,7 @@ func (s *projectService) GetByID(id uint) (models.ProjectCreateResponse, error) 
 }
 
 func (s *projectService) Delete(id uint) error {
-	if err := s.service.DeleteProject(id); err != nil {
+	if err := s.repo.DeleteProject(id); err != nil {
 		s.logger.Error("failed get list", "err", err)
 		return err
 	}
@@ -96,8 +100,8 @@ func (s *projectService) Delete(id uint) error {
 	return nil
 }
 
-func (s *projectService) UpdateProject(id uint, req models.ProjectUpdReq) error{
-	if err := s.service.UpdateProject(id, req); err != nil{
+func (s *projectService) UpdateProject(id uint, req models.ProjectUpdReq) error {
+	if err := s.repo.UpdateProject(id, req); err != nil {
 		s.logger.Error("failed update project", "err", err)
 		return err
 	}
@@ -105,4 +109,3 @@ func (s *projectService) UpdateProject(id uint, req models.ProjectUpdReq) error{
 	s.logger.Info("update project by id successful", "op", "service.project.updateProject", "id", id)
 	return nil
 }
-
