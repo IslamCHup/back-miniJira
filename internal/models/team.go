@@ -21,3 +21,12 @@ type TeamUpdateReq struct {
 	ProjectID *uint   `json:"project_id"`
 	UserID    *uint   `json:"user_id"`
 }
+
+type TeamResponse struct {
+	ID        uint   `json:"id"`
+	Name      string `json:"name"`
+	UserIDs   []uint `json:"user_ids"`
+	ProjectID uint   `json:"project_id"`
+	UserID    uint   `json:"user_id"`   
+	
+}
