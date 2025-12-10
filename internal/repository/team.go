@@ -12,7 +12,6 @@ type TeamRepository interface {
 	UpdateTeam(req *models.Team) error
 	DeleteTeam(id uint) error
 	GetTeamByID(teamID uint) (models.Team, []uint, error)
-
 	AssignUsers(team *models.Team, userIDs []uint) error
 }
 
@@ -74,20 +73,6 @@ func (r *teamRepository) GetTeamByID(teamID uint) (models.Team, []uint, error) {
 
 	r.logger.Info("GetByIDTeam success", "id", teamID)
 	return team, ids, nil
-}
-
-func (r *teamRepository) GetUserIDs(teamID uint) ([]uint, error) {
-	var ids []uint
-	err := r.db.Table("team_users").
-		Where("team_id = ?", teamID).
-		Pluck("user_id", &ids).Error
-
-	if err != nil {
-		r.logger.Error("GetUserIDs failed", "team_id", teamID, "err", err)
-		return nil, err
-	}
-
-	return ids, nil
 }
 
 func (r *teamRepository) AssignUsers(team *models.Team, userIDs []uint) error {
