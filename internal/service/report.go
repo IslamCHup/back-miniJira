@@ -4,6 +4,7 @@ import (
 	"back-minijira-petproject1/internal/models"
 	"back-minijira-petproject1/internal/repository"
 	"fmt"
+	"log/slog"
 	"time"
 )
 
@@ -16,9 +17,10 @@ type ReportService interface {
 
 type reportService struct {
 	repo repository.ReportRepository
+	logger slog.Logger
 }
 
-func NewReportService(report repository.ReportRepository) ReportService {
+func NewReportService(report repository.ReportRepository, logger *slog.Logger) ReportService {
 	return &reportService{repo: report}
 }
 

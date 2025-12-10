@@ -2,6 +2,7 @@ package transport
 
 import (
 	"back-minijira-petproject1/internal/service"
+	"log/slog"
 	"net/http"
 	"strconv"
 
@@ -12,7 +13,7 @@ type ReportHandler struct {
 	service service.ReportService
 }
 
-func NewReportHandler(s service.ReportService) *ReportHandler {
+func NewReportHandler(s service.ReportService, logger *slog.Logger) *ReportHandler {
 	return &ReportHandler{service: s}
 }
 

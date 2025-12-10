@@ -26,18 +26,23 @@ func main() {
 	projectRepo := repository.NewProjectRepository(db, logger)
 	taskRepo := repository.NewTaskRepository(db, logger)
 	userRepo := repository.NewUserRepository(db, logger)
+	reportRepo := repository.NewReportRepository(db, logger)
 
 	projectService := service.NewProjectService(db, logger, projectRepo)
-	taskService := service.NewTaskService(db, logger, taskRepo)
+	taskService := service.NewTaskService(db, logger, taskRepo, projectRepo)
 	userService := service.NewUserService(userRepo, db, logger)
 	authService := service.NewAuthService(userRepo, logger)
+	reportService := service.NewReportService(reportRepo, logger)
 
 	userHandler := transport.NewUserHandler(userService, logger)
 	authHandler := transport.NewAuthHandler(authService, logger)
+	reportHandler := transport.NewReportHandler(reportService, logger)
 
 	fmt.Println(projectService, taskService)
 
 	r := gin.Default()
+
+	reportHandler.RegisterRoutes(r)
 
 	r.GET("/health", func(c *gin.Context) {
 		c.JSON(200, gin.H{"status": "ok"})
