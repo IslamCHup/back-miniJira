@@ -47,8 +47,8 @@ func (s *reportService) AverageTime(projectID uint) (models.AvgTimeDTO, error) {
 	return models.AvgTimeDTO{
 		TasksCount:     len(tasks),
 		CompletedCount: len(tasks),
-		AverageSeconds: int64(avg),
-		AverageHuman:   fmt.Sprintf("%ds", avg),
+		AverageSeconds: int64(avg.Seconds()),
+		AverageHuman:   avg.Round(time.Second).String(),
 	}, nil
 }
 
