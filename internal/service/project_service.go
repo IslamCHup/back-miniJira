@@ -5,6 +5,8 @@ import (
 	"back-minijira-petproject1/internal/repository"
 	"errors"
 	"log/slog"
+	"slices"
+	"strings"
 
 	"gorm.io/gorm"
 )
@@ -37,8 +39,8 @@ func (s *projectService) Create(req *models.ProjectCreateReq) (*models.ProjectCr
 	}
 
 	statusName := map[string]bool{
-		"to do":       true,
-		"in progress": true,
+		"todo":        true,
+		"in_progress": true,
 		"done":        true,
 	}
 
@@ -83,7 +85,7 @@ func (s *projectService) GetByID(id uint) (models.ProjectCreateResponse, error) 
 	project, err := s.repo.GetProjectByID(id)
 
 	if err != nil {
-		s.logger.Error("failed get list", "err", err)
+		s.logger.Error("failed get project by id", "id", id, "err", err)
 		return models.ProjectCreateResponse{}, err
 	}
 
@@ -93,7 +95,7 @@ func (s *projectService) GetByID(id uint) (models.ProjectCreateResponse, error) 
 
 func (s *projectService) Delete(id uint) error {
 	if err := s.repo.DeleteProject(id); err != nil {
-		s.logger.Error("failed get list", "err", err)
+		s.logger.Error("failed delete by id", "id", id, "err", err)
 		return err
 	}
 	s.logger.Info("delete project by id successful", "op", "service.project.deleteProject")
@@ -101,6 +103,34 @@ func (s *projectService) Delete(id uint) error {
 }
 
 func (s *projectService) UpdateProject(id uint, req models.ProjectUpdReq) error {
+	project, err := s.repo.GetProjectByID(id)
+	if err != nil {
+		s.logger.Error("failed get project by id", "id", id, "err", err)
+		return err
+	}
+
+	allowedStatus := map[string][]string{
+		"todo":        {"in_progress"},
+		"in_progress": {"todo", "done"},
+		"done":        {"in_progress"},
+	}
+	if req.Status != nil {
+		oldStatusTask := strings.ToLower(project.Status)
+		var newStatusProject string
+		if req.Status != nil {
+			newStatusProject = strings.ToLower(*req.Status)
+			statusSlice, ok := allowedStatus[oldStatusTask]
+			if !ok {
+				s.logger.Error("such status does not exist", "task_status_current", project.Status)
+				return errors.New("the task status changes only in a certain order")
+			}
+
+			if !slices.Contains(statusSlice, newStatusProject) {
+				s.logger.Error("can't skip status", "task_status_current", project.Status, "req_tas_status", req.Status)
+				return errors.New("the task status changes only in a certain order")
+			}
+		}
+	}
 	if err := s.repo.UpdateProject(id, req); err != nil {
 		s.logger.Error("failed update project", "err", err)
 		return err

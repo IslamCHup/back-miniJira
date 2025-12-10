@@ -66,10 +66,10 @@ func (r *projectRepository) GetProjectByID(id uint) (models.ProjectCreateRespons
 func (r *projectRepository) ListProjects(filter *models.ProjectFilter) ([]models.ProjectCreateResponse, error) {
 	var projects []models.Project
 	query := r.db.Model(models.Project{})
-	if filter.Title != "" {
+	if *filter.Title != "" {
 		query = query.Where("title = ?", filter.Title)
 	}
-	if filter.Status != "" {
+	if *filter.Status != "" {
 		query = query.Where("status = ?", filter.Status)
 	}
 	if filter.Limit > 0 {

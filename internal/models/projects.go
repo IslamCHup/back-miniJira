@@ -6,7 +6,7 @@ type Project struct {
 	Base
 	Title        string        `json:"title"`
 	Description  string        `json:"description"`
-	Tasks        []Task        `json:"tasks"`
+	Tasks        *[]Task        `json:"tasks"`
 	Status       string        `json:"status"`
 	TimeEnd      *time.Time     `json:"time_end"`
 	ChatMessages []ChatMessage `gorm:"polymorphic:Chatable"`
@@ -16,7 +16,7 @@ type Project struct {
 type ProjectCreateReq struct {
 	Title       string     `json:"title"`
 	Description string     `json:"description"`
-	Tasks       []*Task    `json:"tasks"`
+	Tasks       *[]Task    `json:"tasks"`
 	Status      string     `json:"status"`
 	TimeEnd     *time.Time `json:"time_end"`
 	// Commands []Command `json:"command"`
@@ -25,9 +25,8 @@ type ProjectCreateReq struct {
 type ProjectUpdReq struct {
 	Title       *string    `json:"title"`
 	Description *string    `json:"description"`
-	Tasks       []*Task    `json:"tasks"`
+	Tasks       *[]Task    `json:"tasks"`
 	Status      *string    `json:"status"`
-	TimeEnd     *time.Time `json:"time_end"`
 	// Commands []Command `json:"command"`
 }
 
@@ -40,9 +39,9 @@ type ProjectCreateResponse struct {
 }
 
 type ProjectFilter struct {
-	Title       string
-	Description string
-	Status      string
+	Title       *string
+	Description *string
+	Status      *string
 	Limit       int
 	Offset      int
 }

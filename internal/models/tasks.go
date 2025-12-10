@@ -12,7 +12,7 @@ type Task struct {
 	Priority     int            `json:"priority" gorm:"default:0;"`
 	LimitUser    int            `json:"limit"`
 	StartTask    time.Time      `json:"start_task"`
-	FinishTask   time.Time      `json:"finish_task"`
+	FinishTask   *time.Time      `json:"finish_task"`
 	ChatMessages []ChatMessage  `gorm:"polymorphic:Chatable"`
 }
 
@@ -25,7 +25,7 @@ type TaskCreateReq struct {
 	Priority    int            `json:"priority" gorm:"default:0;"`
 	LimitUser   int            `json:"limit"`
 	StartTask   time.Time      `json:"start_task"`
-	FinishTask  time.Time      `json:"finish_task"`
+	FinishTask  *time.Time      `json:"finish_task"`
 }
 
 type TaskCreateRes struct {
@@ -41,7 +41,7 @@ type TaskUpdateReq struct {
 	Description *string         `json:"description"`
 	Status      *string         `json:"status"`
 	ProjectID   *uint           `json:"project_id"`
-	Users       []*UserResponse `json:"user"`
+	Users       *[]UserResponse `json:"user"`
 	Priority    *int            `json:"priority"`
 	LimitUser   *int            `json:"limit"`
 	StartTask   *time.Time      `json:"start_task"`

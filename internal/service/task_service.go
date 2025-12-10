@@ -118,8 +118,8 @@ func (s *taskService) UpdateTask(id uint, req models.TaskUpdateReq) error {
 			}
 		}
 
-		if req.Users != nil && task.LimitUser < len(req.Users) {
-			s.logger.Error("the number of users exceeds the allowed limit", "limit", task.LimitUser, "users_count", len(req.Users))
+		if req.Users != nil && task.LimitUser < len(*req.Users) {
+			s.logger.Error("the number of users exceeds the allowed limit", "limit", task.LimitUser, "users_count", len(*req.Users))
 			return errors.New("the number of users exceeds the allowed limit")
 		}
 
@@ -135,8 +135,18 @@ func (s *taskService) UpdateTask(id uint, req models.TaskUpdateReq) error {
 			s.logger.Error("failed update task from req", "err", err)
 			return err
 		}
-
+		statusProgress := strings.ToLower("in_progress")
 		statusDone := "done"
+
+		if *reqLocal.Status == statusProgress{
+			task.StartTask = time.Now()
+			task.FinishTask  = nil
+		}
+
+		if *reqLocal.Status == statusDone{
+			*task.FinishTask = time.Now()
+		}
+
 		countWithStatus, err := taskrepo.CountTasksByStatusByProjectID(*reqLocal.ProjectID,
 			task.ID, statusDone)
 
@@ -168,7 +178,7 @@ func buildTaskResponse(task *models.Task) *models.TaskResponse {
 		Users:       task.Users,
 		LimitUser:   task.LimitUser,
 		StartTask:   task.StartTask,
-		FinishTask:  task.FinishTask,
+		FinishTask:  *task.FinishTask,
 	}
 
 	switch task.Priority {
