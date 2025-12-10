@@ -4,6 +4,7 @@ import (
 	"back-minijira-petproject1/internal/models"
 	"back-minijira-petproject1/internal/repository"
 	"fmt"
+	"time"
 )
 
 type ReportService interface {
@@ -37,24 +38,30 @@ func (s *reportService) AverageTime(projectID uint) (models.AvgTimeDTO, error) {
 		}, nil
 	}
 
-	var sum int64
+	var total time.Duration
 	for _, t := range tasks {
-		sum += int64(t.FinishTask.Sub(t.StartTask).Seconds())
+		total += t.FinishTask.Sub(t.StartTask)
 	}
-	avg := sum / int64(len(tasks))
+	avg := total / time.Duration(len(tasks))
 
 	return models.AvgTimeDTO{
 		TasksCount:     len(tasks),
 		CompletedCount: len(tasks),
-		AverageSeconds: avg,
+		AverageSeconds: int64(avg),
 		AverageHuman:   fmt.Sprintf("%ds", avg),
 	}, nil
 }
 
 // --- Completion Percent ---
 func (s *reportService) CompletionPercent(projectID uint) (models.CompletionPercentDTO, error) {
-	total, _ := s.repo.CountTasks(projectID)
-	done, _ := s.repo.CountDoneTasks(projectID)
+	total, err := s.repo.CountTasks(projectID)
+	if err != nil {
+		return models.CompletionPercentDTO{}, err
+	}
+	done, err := s.repo.CountDoneTasks(projectID)
+	if err != nil {
+		return models.CompletionPercentDTO{}, err
+	}
 
 	percent := 0.0
 	if total > 0 {
@@ -81,7 +88,7 @@ func (s *reportService) UserTracker(projectID uint, userID uint) (models.UserTra
 			tracker.ActiveTasks = append(tracker.ActiveTasks, models.UserTrackerTaskDTO{
 				TaskID:    t.ID,
 				Title:     t.Title,
-				StartedAt: t.StartTask.String(),
+				StartedAt: t.StartTask.Format(time.RFC3339),
 			})
 		}
 
