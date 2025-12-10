@@ -8,7 +8,7 @@ type User struct {
 	Tasks        []Task `gorm:"many2many:user_tasks;" json:"-"`
 	IsAdmin      bool   `json:"is_admin"`
 	IsVerified   bool   `json:"is_verified"`
-	VerifyToken  string `json"-"`
+	VerifyToken  string `json:"-"`
 }
 
 type UserCreateReq struct {

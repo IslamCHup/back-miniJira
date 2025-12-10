@@ -46,12 +46,10 @@ func (s *AuthService) Register(req models.RegisterRequest) error {
 	}
 
 	verifyLink := fmt.Sprintf("http://localhost:8080/auth/verify?token=%s", verifyToken)
-
-	go func() {
-		if err := s.emailService.SendVerificationEmail(user.Email, user.FullName, verifyLink); err != nil {
-			s.logger.Error("email send failed", "error", err)
-		}
-	}()
+	if err := s.emailService.SendVerificationEmail(user.Email, user.FullName, verifyLink); err != nil {
+		s.logger.Error("email send failed", "error", err)
+		return fmt.Errorf("failed to send verification email: %w", err)
+	}
 
 	return nil
 }
