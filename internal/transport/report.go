@@ -2,6 +2,7 @@ package transport
 
 import (
 	"back-minijira-petproject1/internal/service"
+	"net/http"
 	"strconv"
 
 	"github.com/gin-gonic/gin"
@@ -18,51 +19,71 @@ func NewReportHandler(s service.ReportService) *ReportHandler {
 func (h *ReportHandler) RegisterRoutes(r *gin.Engine) {
 	reports := r.Group("/projects/:id/reports")
 	{
-		reports.GET("/top-workers")
-		reports.GET("avg-time")
-		reports.GET("completion-percent")
-		reports.GET("/user-tracker/:userId")
+		reports.GET("/top-workers", h.GetTopWorkers)
+		reports.GET("/avg-time", h.GetAverageTime)
+		reports.GET("/completion-percent", h.GetCompletionPercent)
+		reports.GET("/user-tracker/:userId", h.GetUserTracker)
 	}
 }
 
 func (h *ReportHandler) GetTopWorkers(c *gin.Context) {
-	id, _ := strconv.Atoi(c.Param("id"))
-	data, err := h.service.TopWorkers(uint(id))
+	id, err := strconv.Atoi(c.Param("id"))
 	if err != nil {
-		c.JSON(500, gin.H{"error": err.Error()})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid project id"})
 		return
 	}
-	c.JSON(200, data)
+	data, err := h.service.TopWorkers(uint(id))
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, data)
 }
 
 func (h *ReportHandler) GetAverageTime(c *gin.Context) {
-	id, _ := strconv.Atoi(c.Param("id"))
-	data, err := h.service.AverageTime(uint(id))
+	id, err := strconv.Atoi(c.Param("id"))
 	if err != nil {
-		c.JSON(500, gin.H{"error": err.Error()})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid project id"})
 		return
 	}
-	c.JSON(200, data)
+	data, err := h.service.AverageTime(uint(id))
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, data)
 }
 
 func (h *ReportHandler) GetCompletionPercent(c *gin.Context) {
-	id, _ := strconv.Atoi(c.Param("id"))
-	data, err := h.service.CompletionPercent(uint(id))
+	id, err := strconv.Atoi(c.Param("id"))
 	if err != nil {
-		c.JSON(500, gin.H{"error": err.Error()})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid project id"})
 		return
 	}
-	c.JSON(200, data)
+	data, err := h.service.CompletionPercent(uint(id))
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, data)
 }
 
 func (h *ReportHandler) GetUserTracker(c *gin.Context) {
-	projectID, _ := strconv.Atoi(c.Param("id"))
-	userID, _ := strconv.Atoi(c.Param("userId"))
+	projectID, err := strconv.Atoi(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid project id"})
+		return
+	}
+	userID, err := strconv.Atoi(c.Param("userId"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid user id"})
+		return
+	}
 
 	data, err := h.service.UserTracker(uint(projectID), uint(userID))
 	if err != nil {
-		c.JSON(500, gin.H{"error": err.Error()})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
-	c.JSON(200, data)
+	c.JSON(http.StatusOK, data)
 }
