@@ -96,32 +96,36 @@ func (h *TaskHandler) DeleteTask(c *gin.Context) {
 }
 
 func (h *TaskHandler) Create(c *gin.Context) {
-	var task models.TaskCreateReq
+	var req models.TaskCreateReq
 
-	if err := c.ShouldBindJSON(&task); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err})
+	if err := c.ShouldBindJSON(&req); err != nil {
+		h.logger.Warn("invalid create task body", "op", "task.handler.Create", "err", err)
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request: " + err.Error()})
 		return
 	}
 
-	if err := h.service.CreateTask(&task); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err})
+	if err := h.service.CreateTask(&req); err != nil {
+		h.logger.Error("failed to create task", "op", "task.handler.Create", "err", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create task"})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "create successful"})
+	h.logger.Info("task created", "op", "task.handler.Create")
+	c.JSON(http.StatusCreated, gin.H{"message": "create successful"})
 }
 
 func (h *TaskHandler) Update(c *gin.Context) {
-	var updateTaskInput models.TaskUpdateReq
+	var req models.TaskUpdateReq
 
-	if err := c.ShouldBindJSON(&updateTaskInput); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err})
+	if err := c.ShouldBindJSON(&req); err != nil {
+		h.logger.Warn("invalid update task body", "op", "task.handler.Update", "err", err)
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request: " + err.Error()})
 		return
 	}
 
 	id, _ := strconv.Atoi(c.Param("id"))
 
-	if err := h.service.UpdateTask(uint(id), updateTaskInput); err != nil {
+	if err := h.service.UpdateTask(uint(id), req); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err})
 		return
 	}
