@@ -189,6 +189,7 @@ func buildTaskResponse(task *models.Task) *models.TaskResponse {
 	}
 
 	resp := &models.TaskResponse{
+		ID:          task.ID,
 		Title:       task.Title,
 		Description: task.Description,
 		Status:      task.Status,

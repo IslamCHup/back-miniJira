@@ -28,7 +28,18 @@ func NewTaskRepository(db *gorm.DB, logger *slog.Logger) TaskRepository {
 }
 
 func (r *taskRepository) CreateTask(req *models.TaskCreateReq) error {
-	res := r.db.Create(&req)
+	task := models.Task{
+		Title:       req.Title,
+		Description: req.Description,
+		Status:      req.Status,
+		ProjectID:   req.ProjectID,
+		Users:       req.Users,
+		Priority:    req.Priority,
+		LimitUser:   req.LimitUser,
+		StartTask:   req.StartTask,
+		FinishTask:  req.FinishTask,
+	}
+	res := r.db.Create(&task)
 	if res.Error != nil {
 		r.logger.Error("CreateTask failed")
 		return res.Error
@@ -98,13 +109,11 @@ func (r *taskRepository) ListTasks(filter *models.TaskFilter) ([]*models.Task, e
 			sortField = "priority"
 		}
 	}
-
-	orderClause := sortField + " " + sortOrder + ", created_at DESC"
-	query = query.Order(orderClause)
-
 	if filter != nil && filter.SortOrder != nil && strings.ToLower(*filter.SortOrder) == "asc" {
 		sortOrder = "ASC"
 	}
+	orderClause := sortField + " " + sortOrder + ", created_at DESC"
+	query = query.Order(orderClause)
 
 	if filter.Limit > 0 {
 		query = query.Limit(filter.Limit)
@@ -114,7 +123,8 @@ func (r *taskRepository) ListTasks(filter *models.TaskFilter) ([]*models.Task, e
 		query = query.Offset(filter.Offset)
 	}
 
-	if err := query.Find(&tasks).Error; err != nil {
+	// Загружаем задачи с пользователями
+	if err := query.Preload("Users").Find(&tasks).Error; err != nil {
 		r.logger.Error("ListTask failed", "err", err)
 		return nil, err
 	}
@@ -124,11 +134,11 @@ func (r *taskRepository) ListTasks(filter *models.TaskFilter) ([]*models.Task, e
 
 func (r *taskRepository) GetTaskByID(id uint) (*models.Task, error) {
 	var task models.Task
-	if err := r.db.Find(&task).Error; err != nil {
-		r.logger.Error("ListTask failed", "id", id, "err", err)
+	if err := r.db.Preload("Users").Where("id = ?", id).First(&task).Error; err != nil {
+		r.logger.Error("GetTaskByID failed", "id", id, "err", err)
 		return nil, err
 	}
-	r.logger.Info("ListTask success", "id", id)
+	r.logger.Info("GetTaskByID success", "id", id)
 	return &task, nil
 }
 

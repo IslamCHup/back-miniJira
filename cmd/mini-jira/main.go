@@ -18,7 +18,7 @@ func main() {
 
 	db := config.SetUpDatabaseConnection(logger)
 
-	//db.Migrator().DropTable(&models.User{})
+	// db.Migrator().DropTable(&models.User{})
 	if err := db.AutoMigrate(&models.Project{}, &models.Task{}, &models.User{}, &models.ChatMessage{}); err != nil {
 		logger.Error("ошибка при выполнении автомиграции", "error", err)
 		panic(fmt.Sprintf("не удалось выполнит миграции:%v", err))

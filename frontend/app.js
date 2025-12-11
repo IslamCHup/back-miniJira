@@ -480,16 +480,19 @@ async function loadProjects() {
         const projects = await response.json();
 
         if (response.ok) {
+            console.log('Projects loaded:', projects);
             if (projects.length === 0) {
                 projectsList.innerHTML = '<div class="empty-state"><p>Проекты не найдены</p></div>';
             } else {
                 projectsList.innerHTML = '';
-                projects.forEach(project => {
+                projects.forEach((project, index) => {
+                    console.log(`Project ${index}:`, project, 'ID:', project.id || project.ID);
                     const projectCard = createProjectCard(project);
                     projectsList.appendChild(projectCard);
                 });
             }
         } else {
+            console.error('Failed to load projects:', response.status);
             projectsList.innerHTML = '<div class="empty-state"><p>Ошибка при загрузке проектов</p></div>';
         }
     } catch (error) {
@@ -500,16 +503,63 @@ async function loadProjects() {
 function createProjectCard(project) {
     const card = document.createElement('div');
     card.className = 'project-card';
+
+    // Поддерживаем оба варианта имен полей (lowercase и с заглавной)
+    // Проверяем ID более тщательно (может быть 0, что тоже валидно)
+    let projectId = null;
+    if (project.id !== undefined && project.id !== null) {
+        projectId = project.id;
+    } else if (project.ID !== undefined && project.ID !== null) {
+        projectId = project.ID;
+    }
+
+    const projectTitle = project.title || project.Title || 'Без названия';
+    const projectDesc = project.description || project.Description || 'Нет описания';
+    const projectStatus = project.status || project.Status || 'N/A';
+
+    console.log('Creating project card:', { project, projectId, title: projectTitle });
+
+    if (projectId === null || projectId === undefined) {
+        console.error('Project ID is missing in project object:', project);
+    }
+
     card.innerHTML = `
-        <h3>${escapeHtml(project.title || 'Без названия')}</h3>
-        <p>${escapeHtml(project.description || 'Нет описания')}</p>
-        <span class="status-badge ${getStatusClass(project.status)}">${escapeHtml(project.status || 'N/A')}</span>
+        <h3>${escapeHtml(projectTitle)}</h3>
+        <p>${escapeHtml(projectDesc)}</p>
+        <span class="status-badge ${getStatusClass(projectStatus)}">${escapeHtml(projectStatus)}</span>
     `;
-    card.addEventListener('click', () => showProject(project.id));
+    card.addEventListener('click', () => {
+        console.log('Opening project with ID:', projectId, 'from project:', project);
+        if (projectId !== null && projectId !== undefined) {
+            showProject(projectId);
+        } else {
+            console.error('Cannot open project: ID is missing!', project);
+            alert('Ошибка: ID проекта не найден');
+        }
+    });
     return card;
 }
 
 async function showProject(projectId) {
+    console.log('showProject called with ID:', projectId, 'type:', typeof projectId);
+
+    // Более строгая проверка: ID должен быть числом и не null/undefined
+    if (projectId === null || projectId === undefined || projectId === '') {
+        console.error('Project ID is missing!', projectId);
+        alert('Ошибка: ID проекта не указан');
+        return;
+    }
+
+    // Преобразуем в число, если это строка
+    const numericId = typeof projectId === 'string' ? parseInt(projectId, 10) : projectId;
+    if (isNaN(numericId)) {
+        console.error('Project ID is not a valid number!', projectId);
+        alert('Ошибка: ID проекта должен быть числом');
+        return;
+    }
+
+    projectId = numericId; // Используем числовой ID
+
     currentProjectId = projectId;
     currentTaskId = null;
     stopChatPolling();
@@ -526,53 +576,157 @@ async function showProject(projectId) {
     if (projectActions) projectActions.style.display = isAdmin ? 'flex' : 'none';
     if (createTaskBtn) createTaskBtn.style.display = isAdmin ? 'block' : 'none';
 
+    // Показываем загрузку
+    const titleEl = document.getElementById('project-title');
+    const descEl = document.getElementById('project-description');
+    const statusBadge = document.getElementById('project-status');
+    const tasksList = document.getElementById('project-tasks-list');
+
+    if (titleEl) titleEl.textContent = 'Загрузка...';
+    if (descEl) descEl.textContent = 'Загрузка данных проекта...';
+    if (statusBadge) statusBadge.textContent = '...';
+    if (tasksList) tasksList.innerHTML = '<div class="loading">Загрузка задач...</div>';
+
     try {
         // Load project details
+        console.log('Fetching project with ID:', projectId);
         const projectResponse = await projectsAPI.getProjectById(projectId);
-        const project = await projectResponse.json();
+        console.log('Project response status:', projectResponse.status, projectResponse.ok);
 
-        if (projectResponse.ok) {
-            document.getElementById('project-title').textContent = project.title || 'Без названия';
-            document.getElementById('project-description').textContent = project.description || 'Нет описания';
-            const statusBadge = document.getElementById('project-status');
-            statusBadge.textContent = project.status || 'N/A';
-            statusBadge.className = `status-badge ${getStatusClass(project.status)}`;
+        if (!projectResponse.ok) {
+            console.error('Failed to load project:', projectResponse.status, projectResponse.statusText);
+            const errorText = await projectResponse.text();
+            console.error('Error response:', errorText);
+            let errorData = {};
+            try {
+                errorData = JSON.parse(errorText);
+            } catch (e) {
+                console.error('Failed to parse error response');
+            }
+
+            if (titleEl) titleEl.textContent = 'Ошибка загрузки';
+            if (descEl) descEl.textContent = 'Не удалось загрузить данные проекта';
+            if (statusBadge) statusBadge.textContent = 'N/A';
+            if (tasksList) tasksList.innerHTML = '<div class="empty-state"><p>Ошибка при загрузке</p></div>';
+
+            alert('Ошибка при загрузке проекта: ' + (errorData.error || projectResponse.statusText));
+            return;
+        }
+
+        const project = await projectResponse.json();
+        console.log('Project data loaded:', project);
+        console.log('Project fields:', {
+            title: project.title || project.Title,
+            description: project.description || project.Description,
+            status: project.status || project.Status
+        });
+
+        // Обновляем UI с данными проекта (поддерживаем оба варианта имен)
+        if (titleEl) {
+            const title = project.title || project.Title || 'Без названия';
+            titleEl.textContent = title;
+            console.log('Set title to:', title);
+        }
+
+        if (descEl) {
+            const description = project.description || project.Description || 'Нет описания';
+            descEl.textContent = description;
+            console.log('Set description to:', description);
+        }
+
+        if (statusBadge) {
+            const status = project.status || project.Status || 'N/A';
+            statusBadge.textContent = status;
+            statusBadge.className = `status-badge ${getStatusClass(status)}`;
+            console.log('Set status to:', status);
         }
 
         // Load project tasks
+        console.log('Fetching tasks for project ID:', projectId);
         const tasksResponse = await tasksAPI.getTasks(projectId);
-        const tasks = await tasksResponse.json();
+        console.log('Tasks response status:', tasksResponse.status, tasksResponse.ok);
 
         const tasksList = document.getElementById('project-tasks-list');
-        if (tasksResponse.ok && tasks.length > 0) {
-            tasksList.innerHTML = '';
-            tasks.forEach(task => {
-                const taskCard = createTaskCard(task);
-                tasksList.appendChild(taskCard);
-            });
+        if (!tasksList) {
+            console.error('Tasks list element not found!');
+        }
+
+        if (!tasksResponse.ok) {
+            console.error('Failed to load tasks:', tasksResponse.status, tasksResponse.statusText);
+            const errorText = await tasksResponse.text();
+            console.error('Tasks error response:', errorText);
+
+            if (tasksList) {
+                tasksList.innerHTML = '<div class="empty-state"><p>Ошибка при загрузке задач</p></div>';
+            }
         } else {
-            tasksList.innerHTML = '<div class="empty-state"><p>Задачи не найдены</p></div>';
+            const tasks = await tasksResponse.json();
+            console.log('Tasks data loaded:', tasks);
+            console.log('Tasks count:', Array.isArray(tasks) ? tasks.length : 'not an array');
+
+            if (tasksList) {
+                if (Array.isArray(tasks) && tasks.length > 0) {
+                    tasksList.innerHTML = '';
+                    tasks.forEach((task, index) => {
+                        console.log(`Task ${index}:`, task);
+                        const taskCard = createTaskCard(task);
+                        tasksList.appendChild(taskCard);
+                    });
+                    console.log('Tasks rendered:', tasks.length);
+                } else {
+                    tasksList.innerHTML = '<div class="empty-state"><p>Задачи не найдены</p></div>';
+                    console.log('No tasks found or tasks is not an array');
+                }
+            }
         }
 
         // Load reports
+        console.log('Loading reports for project ID:', projectId);
         await loadReports(projectId);
     } catch (error) {
         console.error('Error loading project:', error);
+        console.error('Error stack:', error.stack);
+
+        const titleEl = document.getElementById('project-title');
+        const descEl = document.getElementById('project-description');
+        const statusBadge = document.getElementById('project-status');
+        const tasksList = document.getElementById('project-tasks-list');
+
+        if (titleEl) titleEl.textContent = 'Ошибка';
+        if (descEl) descEl.textContent = 'Не удалось загрузить данные проекта: ' + error.message;
+        if (statusBadge) statusBadge.textContent = 'N/A';
+        if (tasksList) tasksList.innerHTML = '<div class="empty-state"><p>Ошибка при загрузке</p></div>';
+
+        alert('Ошибка при загрузке проекта: ' + error.message);
     }
 }
 
 function createTaskCard(task) {
     const card = document.createElement('div');
     card.className = 'task-card';
+    
+    // Поддерживаем оба варианта имен полей
+    const taskId = task.id || task.ID;
+    const taskTitle = task.title || task.Title || 'Без названия';
+    const taskDesc = task.description || task.Description || 'Нет описания';
+    const taskStatus = task.status || task.Status || 'N/A';
+    const taskPriority = task.priority || task.Priority || '';
+    
     card.innerHTML = `
-        <h4>${escapeHtml(task.title || 'Без названия')}</h4>
-        <p>${escapeHtml(task.description || 'Нет описания')}</p>
+        <h4>${escapeHtml(taskTitle)}</h4>
+        <p>${escapeHtml(taskDesc)}</p>
         <div class="task-meta">
-            <span class="status-badge ${getStatusClass(task.status)}">${escapeHtml(task.status || 'N/A')}</span>
-            ${task.priority ? `<span>Приоритет: ${task.priority}</span>` : ''}
+            <span class="status-badge ${getStatusClass(taskStatus)}">${escapeHtml(taskStatus)}</span>
+            ${taskPriority ? `<span>Приоритет: ${escapeHtml(taskPriority)}</span>` : ''}
         </div>
     `;
-    card.addEventListener('click', () => showTask(task.id));
+    card.addEventListener('click', () => {
+        if (taskId) {
+            showTask(taskId);
+        } else {
+            console.error('Task ID is missing!', task);
+        }
+    });
     return card;
 }
 
@@ -929,18 +1083,30 @@ async function handleCreateTask(e) {
     }
 
     try {
+        console.log('Creating task:', { title, description, status, projectId: currentProjectId, priority });
         const response = await tasksAPI.createTask(title, description, status, currentProjectId, priority);
-        const data = await response.json();
+        console.log('Create task response status:', response.status, response.ok);
 
-        if (response.ok) {
-            closeCreateTaskModal();
-            showProject(currentProjectId); // Перезагружаем проект
-        } else {
-            showError('create-task-error', data.error || 'Ошибка при создании задачи');
+        if (!response.ok) {
+            const errorText = await response.text();
+            console.error('Failed to create task:', response.status, errorText);
+            let errorData = {};
+            try {
+                errorData = JSON.parse(errorText);
+            } catch (e) {
+                console.error('Failed to parse error response');
+            }
+            showError('create-task-error', errorData.error || 'Ошибка при создании задачи');
+            return;
         }
+
+        const data = await response.json().catch(() => ({}));
+        console.log('Task created successfully:', data);
+        closeCreateTaskModal();
+        showProject(currentProjectId); // Перезагружаем проект
     } catch (error) {
         console.error('Error creating task:', error);
-        showError('create-task-error', 'Ошибка соединения с сервером');
+        showError('create-task-error', 'Ошибка соединения с сервером: ' + error.message);
     }
 }
 

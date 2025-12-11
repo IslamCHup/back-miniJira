@@ -3,6 +3,7 @@ package repository
 import (
 	"back-minijira-petproject1/internal/models"
 	"log/slog"
+	"time"
 
 	"gorm.io/gorm"
 )
@@ -53,10 +54,16 @@ func (r *projectRepository) GetProjectByID(id uint) (models.ProjectCreateRespons
 	}
 
 	resp := models.ProjectCreateResponse{
+		ID:          project.ID,
 		Title:       project.Title,
 		Description: project.Description,
 		Status:      project.Status,
-		TimeEnd:     *project.TimeEnd,
+	}
+
+	if project.TimeEnd != nil {
+		resp.TimeEnd = *project.TimeEnd
+	} else {
+		resp.TimeEnd = time.Time{} // Пустое время, если nil
 	}
 
 	r.logger.Info("GetProjectByID success", "id", id)
@@ -66,11 +73,15 @@ func (r *projectRepository) GetProjectByID(id uint) (models.ProjectCreateRespons
 func (r *projectRepository) ListProjects(filter *models.ProjectFilter) ([]models.ProjectCreateResponse, error) {
 	var projects []models.Project
 	query := r.db.Model(models.Project{})
-	if *filter.Title != "" {
-		query = query.Where("title = ?", filter.Title)
+
+	if filter.Title != nil && *filter.Title != "" {
+		query = query.Where("title = ?", *filter.Title)
 	}
-	if *filter.Status != "" {
-		query = query.Where("status = ?", filter.Status)
+	if filter.Description != nil && *filter.Description != "" {
+		query = query.Where("description LIKE ?", "%"+*filter.Description+"%")
+	}
+	if filter.Status != nil && *filter.Status != "" {
+		query = query.Where("status = ?", *filter.Status)
 	}
 	if filter.Limit > 0 {
 		query = query.Limit(filter.Limit)
@@ -87,10 +98,16 @@ func (r *projectRepository) ListProjects(filter *models.ProjectFilter) ([]models
 	projectResp := []models.ProjectCreateResponse{}
 	for _, v := range projects {
 		dto := models.ProjectCreateResponse{
+			ID:          v.ID,
 			Title:       v.Title,
 			Description: v.Description,
 			Status:      v.Status,
-			TimeEnd:     *v.TimeEnd,
+		}
+
+		if v.TimeEnd != nil {
+			dto.TimeEnd = *v.TimeEnd
+		} else {
+			dto.TimeEnd = time.Time{} // Пустое время, если nil
 		}
 
 		projectResp = append(projectResp, dto)

@@ -6,9 +6,9 @@ type Project struct {
 	Base
 	Title        string        `json:"title"`
 	Description  string        `json:"description"`
-	Tasks        *[]Task        `json:"tasks"`
+	Tasks        *[]Task       `json:"tasks"`
 	Status       string        `json:"status"`
-	TimeEnd      *time.Time     `json:"time_end"`
+	TimeEnd      *time.Time    `json:"time_end"`
 	ChatMessages []ChatMessage `gorm:"polymorphic:Chatable"`
 	// Commands []Command `json:"command"`
 }
@@ -23,14 +23,15 @@ type ProjectCreateReq struct {
 }
 
 type ProjectUpdReq struct {
-	Title       *string    `json:"title"`
-	Description *string    `json:"description"`
-	Tasks       *[]Task    `json:"tasks"`
-	Status      *string    `json:"status"`
+	Title       *string `json:"title"`
+	Description *string `json:"description"`
+	Tasks       *[]Task `json:"tasks"`
+	Status      *string `json:"status"`
 	// Commands []Command `json:"command"`
 }
 
 type ProjectCreateResponse struct {
+	ID          uint      `json:"id"`
 	Title       string    `json:"title"`
 	Description string    `json:"description"`
 	Status      string    `json:"status"`

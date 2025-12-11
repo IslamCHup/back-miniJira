@@ -21,7 +21,7 @@ func NewTaskHandler(service service.TaskService, logger *slog.Logger) TaskHandle
 	return TaskHandler{service: service, logger: logger}
 }
 
-func (h *TaskHandler) RegisterRoutes(r *gin.Engine,authService service.AuthService) {
+func (h *TaskHandler) RegisterRoutes(r *gin.Engine, authService service.AuthService) {
 	authTasks := r.Group("/tasks")
 	authTasks.Use(middleware.AuthMiddleware(authService))
 	{
@@ -29,7 +29,7 @@ func (h *TaskHandler) RegisterRoutes(r *gin.Engine,authService service.AuthServi
 		authTasks.GET("/:id", h.GetTaskByID)
 	}
 	adminTasks := r.Group("/admin/tasks")
-	adminTasks.Use(middleware.AuthMiddleware(authService),middleware.RequireAdmin())
+	adminTasks.Use(middleware.AuthMiddleware(authService), middleware.RequireAdmin())
 	{
 		adminTasks.POST("/", h.Create)
 		adminTasks.PATCH("/:id", h.Update)
@@ -52,41 +52,57 @@ func (h *TaskHandler) GetTaskByID(c *gin.Context) {
 }
 
 func (h *TaskHandler) ListTasks(c *gin.Context) {
-	status := strings.ToLower(strings.TrimSpace(c.Query("status")))
-
-	userIDInt, _ := strconv.Atoi(c.Query("user_id"))
-	userID := uint(userIDInt)
-
-	projectIDInt, _ := strconv.Atoi(c.Query("project_id"))
-	projectID := uint(projectIDInt)
-
-	search := c.Query("search")
-
-	priority, _ := strconv.Atoi(c.Query("priority"))
-
-	sortBy := strings.ToLower(strings.TrimSpace(c.Query("sort_by")))
-
-	sortOrder := strings.ToLower(strings.TrimSpace(c.Query("sort_Order")))
-
 	filter := models.TaskFilter{
-		Status:    &status,
-		UserID:    &userID,
-		ProjectID: &projectID,
-		Search:    &search,
-		Priority:  &priority,
-		SortBy:    &sortBy,
-		SortOrder: &sortOrder,
-		Limit:     20,
-		Offset:    0,
+		Limit:  20,
+		Offset: 0,
+	}
+
+	// Обрабатываем параметры запроса только если они не пустые
+	if status := strings.ToLower(strings.TrimSpace(c.Query("status"))); status != "" {
+		filter.Status = &status
+	}
+
+	if userIDStr := c.Query("user_id"); userIDStr != "" {
+		if userIDInt, err := strconv.Atoi(userIDStr); err == nil && userIDInt > 0 {
+			userID := uint(userIDInt)
+			filter.UserID = &userID
+		}
+	}
+
+	if projectIDStr := c.Query("project_id"); projectIDStr != "" {
+		if projectIDInt, err := strconv.Atoi(projectIDStr); err == nil && projectIDInt > 0 {
+			projectID := uint(projectIDInt)
+			filter.ProjectID = &projectID
+		}
+	}
+
+	if search := c.Query("search"); search != "" {
+		filter.Search = &search
+	}
+
+	if priorityStr := c.Query("priority"); priorityStr != "" {
+		if priority, err := strconv.Atoi(priorityStr); err == nil {
+			filter.Priority = &priority
+		}
+	}
+
+	if sortBy := strings.ToLower(strings.TrimSpace(c.Query("sort_by"))); sortBy != "" {
+		filter.SortBy = &sortBy
+	}
+
+	if sortOrder := strings.ToLower(strings.TrimSpace(c.Query("sort_order"))); sortOrder != "" {
+		filter.SortOrder = &sortOrder
 	}
 
 	tasks, err := h.service.ListTasks(&filter)
 
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err})
+		h.logger.Error("failed to list tasks", "op", "task.handler.ListTasks", "err", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to list tasks: " + err.Error()})
 		return
 	}
 
+	h.logger.Info("tasks listed", "op", "task.handler.ListTasks", "count", len(tasks))
 	c.JSON(http.StatusOK, tasks)
 }
 
@@ -110,13 +126,28 @@ func (h *TaskHandler) Create(c *gin.Context) {
 		return
 	}
 
+	// Поддержка camelCase поля от фронта
+	if req.ProjectID == 0 && req.ProjectId != 0 {
+		req.ProjectID = req.ProjectId
+	}
+
+	if req.ProjectID == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "project_id is required"})
+		return
+	}
+
+	// Значение по умолчанию для статуса
+	if strings.TrimSpace(req.Status) == "" {
+		req.Status = "todo"
+	}
+
 	if err := h.service.CreateTask(&req); err != nil {
 		h.logger.Error("failed to create task", "op", "task.handler.Create", "err", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create task"})
 		return
 	}
 
-	h.logger.Info("task created", "op", "task.handler.Create")
+	h.logger.Info("task created", "op", "task.handler.Create", "project_id", req.ProjectID)
 	c.JSON(http.StatusCreated, gin.H{"message": "create successful"})
 }
 
@@ -132,7 +163,7 @@ func (h *TaskHandler) Update(c *gin.Context) {
 	id, _ := strconv.Atoi(c.Param("id"))
 
 	if err := h.service.UpdateTask(uint(id), req); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
