@@ -19,6 +19,19 @@ func NewProjectHandler(service service.ProjectService, logger *slog.Logger) Proj
 	return ProjectHandler{service: service, logger: logger}
 }
 
+// ...existing code...
+func (h *ProjectHandler) RegisterRoutes(r *gin.Engine) {
+    projects := r.Group("/projects")
+    {
+        projects.GET("/", h.ListProjects)
+        projects.GET("/:id", h.GetByID)
+        projects.POST("/", h.Create)
+        projects.PATCH("/:id", h.UpdateProject)
+        projects.DELETE("/:id", h.Delete)
+    }
+}
+// ...existing code...
+
 func (h *ProjectHandler) ListProjects(c *gin.Context) {
 	title := c.Query("title")
 	description := c.Query("description")
@@ -96,18 +109,18 @@ func (h *ProjectHandler) Delete(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "delete successful"})
 }
 
-func (h *ProjectHandler) UpdateProject(c *gin.Context){
+func (h *ProjectHandler) UpdateProject(c *gin.Context) {
 	idStr := c.Param("id")
 	id, _ := strconv.Atoi(idStr)
 	var req models.ProjectUpdReq
 
-	if err := c.ShouldBindJSON(&req); err != nil{
+	if err := c.ShouldBindJSON(&req); err != nil {
 		h.logger.Error("failed to parse JSON body", "op", "handler.Create", "err", err)
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request body"})
 		return
 	}
 
-	if err := h.service.UpdateProject(uint(id), req); err != nil{
+	if err := h.service.UpdateProject(uint(id), req); err != nil {
 		h.logger.Error("failed to update project by id", "op", "handler.update", "err", err, "id", id)
 		c.JSON(http.StatusBadRequest, gin.H{"error": "failed update"})
 		return

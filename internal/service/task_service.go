@@ -16,7 +16,7 @@ type TaskService interface {
 	GetTaskByID(id uint) (*models.TaskResponse, error)
 	ListTasks(filter *models.TaskFilter) ([]*models.TaskResponse, error)
 	DeleteTask(id uint) error
-	CreateTask(req models.TaskCreateReq) error
+	CreateTask(req *models.TaskCreateReq) error
 	UpdateTask(id uint, req models.TaskUpdateReq) error
 }
 
@@ -75,7 +75,7 @@ func (s *taskService) DeleteTask(id uint) error {
 	return nil
 }
 
-func (s *taskService) CreateTask(req models.TaskCreateReq) error {
+func (s *taskService) CreateTask(req *models.TaskCreateReq) error {
 	if err := s.repo.CreateTask(req); err != nil {
 		s.logger.Error("failed create task from req", "err", err, "req", req)
 		return err
@@ -88,24 +88,25 @@ func (s *taskService) UpdateTask(id uint, req models.TaskUpdateReq) error {
 	return s.db.Transaction(func(tx *gorm.DB) error {
 		taskrepo := s.repo.WithDB(tx)
 		projectRepo := s.projectRepo.WithDB(tx)
-		task, err := taskrepo.GetTaskByID(id)
 
+		task, err := taskrepo.GetTaskByID(id)
 		if err != nil {
 			s.logger.Error("failed to get the task by id",
 				"op", "service.project.Update", "id", id, "err", err)
 			return err
 		}
 
+		//этого блого нет после ревью
 		allowedTransport := map[string][]string{
 			"todo":        {"in_progress"},
 			"in_progress": {"todo", "done"},
 			"done":        {"in_progress"},
 		}
 
-		oldStatusTask := strings.ToLower(task.Status)
+		oldStatusTask := strings.ToLower(strings.TrimSpace(task.Status))
 		var newStatusTask string
 		if req.Status != nil {
-			newStatusTask = strings.ToLower(*req.Status)
+			newStatusTask = strings.ToLower(strings.TrimSpace(*req.Status))
 			statusSlice, ok := allowedTransport[oldStatusTask]
 			if !ok {
 				s.logger.Error("such status does not exist", "task_status_current", task.Status)
@@ -123,44 +124,57 @@ func (s *taskService) UpdateTask(id uint, req models.TaskUpdateReq) error {
 			return errors.New("the number of users exceeds the allowed limit")
 		}
 
-		reqLocal := req
-		if reqLocal.Status != nil &&
-			strings.EqualFold(newStatusTask, "done") &&
-			!strings.EqualFold(oldStatusTask, "done") {
-			now := time.Now()
-			reqLocal.FinishTask = &now
+		updateReq := models.TaskUpdateReq{
+			Title:       req.Title,
+			Description: req.Description,
+			Status:      req.Status,
+			Users:       req.Users,
+			Priority:    req.Priority,
+			StartTask:   req.StartTask,
+			FinishTask:  req.FinishTask,
 		}
 
-		if err := taskrepo.UpdateTask(task.ID, reqLocal); err != nil {
+		if req.Status != nil {
+			if newStatusTask == "in_progress" && !strings.EqualFold(oldStatusTask, "in_progress") {
+				now := time.Now()
+				updateReq.StartTask = &now
+				updateReq.FinishTask = nil
+			}
+			if newStatusTask == "done" && !strings.EqualFold(oldStatusTask, "done") {
+				now := time.Now()
+				updateReq.FinishTask = &now
+			}
+
+			if strings.EqualFold(oldStatusTask, "done") && newStatusTask == "in_progress" {
+				updateReq.FinishTask = nil
+			}
+			if newStatusTask == "todo" {
+				updateReq.StartTask = nil
+				updateReq.FinishTask = nil
+			}
+		}
+
+		if err := taskrepo.UpdateTask(task.ID, updateReq); err != nil {
 			s.logger.Error("failed update task from req", "err", err)
 			return err
 		}
-		statusProgress := strings.ToLower("in_progress")
-		statusDone := "done"
 
-		if *reqLocal.Status == statusProgress{
-			task.StartTask = time.Now()
-			task.FinishTask  = nil
-		}
-
-		if *reqLocal.Status == statusDone{
-			*task.FinishTask = time.Now()
-		}
-
-		countWithStatus, err := taskrepo.CountTasksByStatusByProjectID(*reqLocal.ProjectID,
-			task.ID, statusDone)
-
+		countWithStatus, err := taskrepo.CountTasksByStatusByProjectID(task.ProjectID, task.ID, "done")
 		if err != nil {
-			s.logger.Error("failed to count the quantity", "err", err)
+			s.logger.Error("failed to count open tasks", "op", "service.task.UpdateTask", "project_id", task.ProjectID, "err", err)
 			return err
 		}
 
-		changeStatusProject := models.ProjectUpdReq{
-			Status: &statusDone,
+		statusDone := "done"
+		statusInProgress := "in_progress"
+		newProjStatus := models.ProjectUpdReq{}
+		if countWithStatus == 0 {
+			newProjStatus.Status = &statusInProgress
+		} else {
+			newProjStatus.Status = &statusDone
 		}
 
-		if *countWithStatus == 0 {
-			projectRepo.UpdateProject(task.ProjectID, changeStatusProject)
+		if err := projectRepo.UpdateProject(task.ProjectID, newProjStatus); err != nil {
 			s.logger.Info("project closed (all tasks done)", "project_id", task.ProjectID)
 		}
 
@@ -170,7 +184,11 @@ func (s *taskService) UpdateTask(id uint, req models.TaskUpdateReq) error {
 }
 
 func buildTaskResponse(task *models.Task) *models.TaskResponse {
-	taskResponse := models.TaskResponse{
+	if task == nil {
+		return nil
+	}
+
+	resp := &models.TaskResponse{
 		Title:       task.Title,
 		Description: task.Description,
 		Status:      task.Status,
@@ -178,16 +196,22 @@ func buildTaskResponse(task *models.Task) *models.TaskResponse {
 		Users:       task.Users,
 		LimitUser:   task.LimitUser,
 		StartTask:   task.StartTask,
-		FinishTask:  *task.FinishTask,
+	}
+
+	if task.FinishTask != nil {
+		resp.FinishTask = *task.FinishTask
 	}
 
 	switch task.Priority {
 	case 1:
-		taskResponse.Title += "!"
-		taskResponse.Priority = "Важно!"
+		resp.Title += "!"
+		resp.Priority = "Важно!"
 	case 2:
-		taskResponse.Title += "!!!"
-		taskResponse.Priority = "Очень важно!!!"
+		resp.Title += "!!!"
+		resp.Priority = "Очень важно!!!"
+	default:
+		resp.Priority = "Обычная"
 	}
-	return &taskResponse
+
+	return resp
 }

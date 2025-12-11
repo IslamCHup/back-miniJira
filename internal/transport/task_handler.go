@@ -20,12 +20,22 @@ func NewTaskHandler(service service.TaskService, logger *slog.Logger) TaskHandle
 	return TaskHandler{service: service, logger: logger}
 }
 
+func (h *TaskHandler) RegisterRoutes(r *gin.Engine) {
+	tasks := r.Group("/tasks")
+	{
+		tasks.GET("/", h.ListTasks)
+		tasks.GET("/:id", h.GetTaskByID)
+		tasks.POST("/", h.Create)
+		tasks.PATCH("/:id", h.Update)
+		tasks.DELETE("/:id", h.DeleteTask)
+	}
+}
+
 func (h *TaskHandler) GetTaskByID(c *gin.Context) {
 	idStr := c.Param("id")
 	id, _ := strconv.Atoi(idStr)
 
 	task, err := h.service.GetTaskByID(uint(id))
-
 	if err != nil {
 		h.logger.Error("failed to get task by id", "op", "task.handler.GetByID", "id", id, "err", err)
 		c.JSON(http.StatusBadRequest, gin.H{"error": "failed to get task by id"})
@@ -36,105 +46,85 @@ func (h *TaskHandler) GetTaskByID(c *gin.Context) {
 }
 
 func (h *TaskHandler) ListTasks(c *gin.Context) {
+	status := strings.ToLower(strings.TrimSpace(c.Query("status")))
 
-	// --- status ---
-	status := c.Query("status")
+	userIDInt, _ := strconv.Atoi(c.Query("user_id"))
+	userID := uint(userIDInt)
 
-	// --- user_id ---
-	var userID *uint
-	if v := c.Query("user_id"); v != "" {
-		if idInt, _ := strconv.Atoi(v) {
-			tmp := uint(idInt)
-			userID = &tmp
-		}
-	}
+	projectIDInt, _ := strconv.Atoi(c.Query("project_id"))
+	projectID := uint(projectIDInt)
 
-	// --- project_id ---
-	var projectID *uint
-	if v := c.Query("project_id"); v != "" {
-		if idInt, err := strconv.Atoi(v); err == nil {
-			tmp := uint(idInt)
-			projectID = &tmp
-		}
-	}
+	search := c.Query("search")
 
-	// --- search ---
-	var searchPtr *string
-	if v := c.Query("search"); v != "" {
-		searchPtr = &v
-	}
+	priority, _ := strconv.Atoi(c.Query("priority"))
 
-	// --- priority (int) ---
-	var priorityPtr *int
-	if v := c.Query("priority"); v != "" {
-		if p, err := strconv.Atoi(v); err == nil {
-			priorityPtr = &p
-		}
-	}
+	sortBy := strings.ToLower(strings.TrimSpace(c.Query("sort_by")))
 
-	// --- sort ---
-	sortBy := c.Query("sort_by")
-	sortOrder := c.Query("sort_order")
+	sortOrder := strings.ToLower(strings.TrimSpace(c.Query("sort_Order")))
 
-	// --- pagination ---
-	var limitPtr *int
-	if v := c.Query("limit"); v != "" {
-		if x, err := strconv.Atoi(v); err == nil {
-			limitPtr = &x
-		}
-	}
-
-	var offsetPtr *int
-	if v := c.Query("offset"); v != "" {
-		if x, err := strconv.Atoi(v); err == nil {
-			offsetPtr = &x
-		}
-	}
-
-	// --- собрать фильтр ---
 	filter := models.TaskFilter{
 		Status:    &status,
-		UserID:    userID,
-		ProjectID: projectID,
-		Search:    searchPtr,
-		Priority:  priorityPtr,
-		SortBy:    sortBy,
-		SortOrder: sortOrder,
-		Limit:     limitPtr,
-		Offset:    offsetPtr,
+		UserID:    &userID,
+		ProjectID: &projectID,
+		Search:    &search,
+		Priority:  &priority,
+		SortBy:    &sortBy,
+		SortOrder: &sortOrder,
+		Limit:     20,
+		Offset:    0,
 	}
 
-	// --- применить фильтр ---
-	db := h.db
-	db = ApplyTaskFilter(db, filter)
+	tasks, err := h.service.ListTasks(&filter)
 
-	// пагинация
-	if limitPtr != nil {
-		db = db.Limit(*limitPtr)
-	}
-	if offsetPtr != nil {
-		db = db.Offset(*offsetPtr)
-	}
-
-	// выполнить запрос
-	var tasks []models.Task
-	if err := db.Find(&tasks).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err})
 		return
 	}
 
-	// конвертация в response (priority → string)
-	resp := make([]TaskResponse, 0, len(tasks))
-	for _, t := range tasks {
-		resp = append(resp, ConvertTaskToResponse(t))
-	}
-
-	c.JSON(http.StatusOK, resp)
+	c.JSON(http.StatusOK, tasks)
 }
 
-/*
-	ListTasks(filter *models.TaskFilter) ([]*models.TaskResponse, error)
-	DeleteTask(id uint) error
-	CreateTask(req models.TaskCreateReq) error
-	UpdateTask(id uint, req models.TaskUpdateReq) error
-*/
+func (h *TaskHandler) DeleteTask(c *gin.Context) {
+	id, _ := strconv.Atoi(c.Param("id"))
+	if err := h.service.DeleteTask(uint(id)); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err})
+		return
+	}
+
+	h.logger.Info("task deleted", "op", "task.handler.Delete", "id", id)
+	c.JSON(http.StatusOK, gin.H{"message": "delete successful"})
+}
+
+func (h *TaskHandler) Create(c *gin.Context) {
+	var task models.TaskCreateReq
+
+	if err := c.ShouldBindJSON(&task); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err})
+		return
+	}
+
+	if err := h.service.CreateTask(&task); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "create successful"})
+}
+
+func (h *TaskHandler) Update(c *gin.Context) {
+	var updateTaskInput models.TaskUpdateReq
+
+	if err := c.ShouldBindJSON(&updateTaskInput); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err})
+		return
+	}
+
+	id, _ := strconv.Atoi(c.Param("id"))
+
+	if err := h.service.UpdateTask(uint(id), updateTaskInput); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "update successful"})
+}

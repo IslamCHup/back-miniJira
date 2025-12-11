@@ -10,12 +10,12 @@ import (
 
 type TaskRepository interface {
 	WithDB(db *gorm.DB) TaskRepository
-	CreateTask(req models.TaskCreateReq) error
+	CreateTask(req *models.TaskCreateReq) error
 	UpdateTask(id uint, req models.TaskUpdateReq) error
 	DeleteTask(id uint) error
 	ListTasks(filter *models.TaskFilter) ([]*models.Task, error)
 	GetTaskByID(id uint) (*models.Task, error)
-	CountTasksByStatusByProjectID(project_id uint, task_id uint, status string) (*int64, error)
+	CountTasksByStatusByProjectID(project_id uint, task_id uint, status string) (int64, error)
 }
 
 type taskRepository struct {
@@ -27,7 +27,7 @@ func NewTaskRepository(db *gorm.DB, logger *slog.Logger) TaskRepository {
 	return &taskRepository{db: db, logger: logger}
 }
 
-func (r *taskRepository) CreateTask(req models.TaskCreateReq) error {
+func (r *taskRepository) CreateTask(req *models.TaskCreateReq) error {
 	res := r.db.Create(&req)
 	if res.Error != nil {
 		r.logger.Error("CreateTask failed")
@@ -136,13 +136,14 @@ func (r *taskRepository) WithDB(db *gorm.DB) TaskRepository {
 	return &taskRepository{db: db, logger: r.logger}
 }
 
-func (r *taskRepository) CountTasksByStatusByProjectID(project_id uint, task_id uint, status string) (*int64, error) {
-	var hasThisStatus int64
-	if err := r.db.Model(&models.Task{}).Where("project_id = ? AND task_id <> ? AND (status IS NULL OR LOWER(status) <>?)",
-		project_id, task_id, status).Count(&hasThisStatus).Error; err != nil {
+func (r *taskRepository) CountTasksByStatusByProjectID(project_id uint, task_id uint, status string) (int64, error) {
+	var countStatus int64
+	status = strings.ToLower(strings.TrimSpace(status))
+	if err := r.db.Model(&models.Task{}).Where("project_id = ? AND id <> ? AND (status IS NULL OR LOWER(status) <>?)",
+		project_id, task_id, status).Count(&countStatus).Error; err != nil {
 		r.logger.Error("CountTasksByStatusByProjectID failed", "project_id", project_id, "task_id", task_id, "err", err)
-		return nil, err
+		return -1, err
 	}
 
-	return &hasThisStatus, nil
+	return countStatus, nil
 }
