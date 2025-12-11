@@ -42,7 +42,7 @@ func (s *reportService) AverageTime(projectID uint) (models.AvgTimeDTO, error) {
 
 	var total time.Duration
 	for _, t := range tasks {
-		total += t.FinishTask.Sub(t.StartTask)
+		total += t.FinishTask.Sub(*t.StartTask)
 	}
 	avg := total / time.Duration(len(tasks))
 
@@ -97,7 +97,7 @@ func (s *reportService) UserTracker(projectID uint, userID uint) (models.UserTra
 		if t.Status == "done" {
 			tracker.Done++
 			doneCount++
-			sum += int64(t.FinishTask.Sub(t.StartTask).Seconds())
+			sum += int64(t.FinishTask.Sub(*t.StartTask).Seconds())
 		}
 	}
 
