@@ -34,11 +34,11 @@ func main() {
 	userService := service.NewUserService(userRepo, db, logger)
 	reportService := service.NewReportService(reportRepo, logger)
 	chatService := service.NewChatService(chatRepo, logger)
-
+	  authService := service.NewAuthService(userRepo, logger)
 	r := gin.Default()
 
 	transport.RegisterRoutes(
-		r, logger, taskService, projectService, reportService, chatService, userService,
+		r, logger, taskService, projectService, reportService, chatService, userService, *authService,userRepo,
 	)
 
 	logger.Info("Server running on :8080")

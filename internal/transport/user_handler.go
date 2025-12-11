@@ -7,6 +7,7 @@ import (
 
 	"back-minijira-petproject1/internal/middleware"
 	"back-minijira-petproject1/internal/models"
+	"back-minijira-petproject1/internal/repository"
 	"back-minijira-petproject1/internal/service"
 
 	"github.com/gin-gonic/gin"
@@ -24,7 +25,8 @@ func NewUserHandler(service service.UserService, logger *slog.Logger) *UserHandl
 	}
 }
 
-func (h *UserHandler) RegisterRoutes(r *gin.Engine) {
+func (h *UserHandler) RegisterRoutes(r *gin.Engine, userRepo repository.UserRepository,
+) {
 	users := r.Group("/users")
 
 	{
