@@ -36,13 +36,11 @@ func main() {
 
 	userHandler := transport.NewUserHandler(userService, logger)
 	authHandler := transport.NewAuthHandler(authService, logger)
-	reportHandler := transport.NewReportHandler(reportService, logger)
 
-	fmt.Println(projectService, taskService)
+	fmt.Println(projectService, taskService, reportService)
 
 	r := gin.Default()
 
-	reportHandler.RegisterRoutes(r)
 
 	r.GET("/health", func(c *gin.Context) {
 		c.JSON(200, gin.H{"status": "ok"})
