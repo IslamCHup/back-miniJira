@@ -4,43 +4,44 @@ import "time"
 
 type Task struct {
 	Base
-	Title        string        `json:"title"`
-	Description  string        `json:"description"`
-	Status       string        `json:"status" gorm:"default:to do"`
-	ProjectID    uint          `json:"project_id"`
-	Users        []User        `json:"user" gorm:"many2many:task_users;"`
-	Priority     int           `json:"priority" gorm:"default:0;"`
-	LimitUser    int           `json:"limit"`
-	StartTask    time.Time     `json:"start_task"`
-	FinishTask   *time.Time    `json:"finish_task"`
+	Title        string        `json:"title" gorm:"type:varchar(255);not null"`
+	Description  string        `json:"description" gorm:"type:text"`
+	Status       string        `json:"status" gorm:"type:varchar(50);default:'todo';index"`
+	ProjectID    uint          `json:"project_id" gorm:"index"`
+	Users        []User        `json:"users" gorm:"many2many:task_users;"`
+	Priority     int           `json:"priority" gorm:"default:0;index"`
+	LimitUser    int           `json:"limit" gorm:"default:1"`
+	StartTask    *time.Time    `json:"start_task" gorm:"index"`
+	FinishTask   *time.Time    `json:"finish_task" gorm:"index"`
 	ChatMessages []ChatMessage `gorm:"polymorphic:Chatable"`
 }
 
 type TaskCreateReq struct {
 	Title       string     `json:"title"`
 	Description string     `json:"description"`
-	Status      string     `json:"status" gorm:"default:to do"`
+	Status      string     `json:"status" binding:"required,oneof=todo in_progress done"`
 	ProjectID   uint       `json:"project_id"`
-	Users       []User     `json:"user" gorm:"many2many:task_users;"`
-	Priority    int        `json:"priority" gorm:"default:0;"`
+	Users       []User     `json:"users"`
+	Priority    int        `json:"priority"`
 	LimitUser   int        `json:"limit"`
-	StartTask   time.Time  `json:"start_task"`
+	StartTask   *time.Time `json:"start_task"`
 	FinishTask  *time.Time `json:"finish_task"`
 }
 
 type TaskCreateRes struct {
+	ID          uint   `json:"id"`
 	Title       string `json:"title"`
 	Description string `json:"description"`
 	Status      string `json:"status"`
 	ProjectID   uint   `json:"project_id"`
-	Users       []User `json:"user"`
+	Users       []User `json:"users"`
 }
 
 type TaskUpdateReq struct {
 	Title       *string    `json:"title"`
 	Description *string    `json:"description"`
-	Status      *string    `json:"status"`
-	Users       *[]User    `json:"user"`
+	Status      *string    `json:"status" binding:"omitempty,oneof=todo in_progress done"`
+	Users       *[]User    `json:"users"`
 	Priority    *int       `json:"priority"`
 	LimitUser   *int       `json:"limit"`
 	StartTask   *time.Time `json:"start_task"`
@@ -60,13 +61,14 @@ type TaskFilter struct {
 }
 
 type TaskResponse struct {
-	Title       string    `json:"title"`
-	Description string    `json:"description"`
-	Status      string    `json:"status"`
-	ProjectID   uint      `json:"project_id"`
-	Users       []User    `json:"user"`
-	Priority    string    `json:"priority"`
-	LimitUser   int       `json:"limit"`
-	StartTask   time.Time `json:"start_task"`
-	FinishTask  time.Time `json:"finish_task"`
+	ID          uint       `json:"id"`
+	Title       string     `json:"title"`
+	Description string     `json:"description"`
+	Status      string     `json:"status"`
+	ProjectID   uint       `json:"project_id"`
+	Users       []User     `json:"users"`
+	Priority    string     `json:"priority"`
+	LimitUser   int        `json:"limit"`
+	StartTask   *time.Time `json:"start_task"`
+	FinishTask  *time.Time `json:"finish_task"`
 }
