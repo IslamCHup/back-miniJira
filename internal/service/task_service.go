@@ -199,7 +199,7 @@ func buildTaskResponse(task *models.Task) *models.TaskResponse {
 	}
 
 	if task.FinishTask != nil {
-		resp.FinishTask = *task.FinishTask
+		resp.FinishTask = task.FinishTask
 	}
 
 	switch task.Priority {
