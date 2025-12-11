@@ -18,6 +18,16 @@ func NewAuthHandler(service *service.AuthService, logger *slog.Logger) *AuthHand
 	return &AuthHandler{service: service, logger: logger}
 }
 
+func (h *AuthHandler) SetupRoutes(r *gin.Engine) {
+	auth := r.Group("/auth")
+	{
+		auth.POST("/register", h.Register)
+		auth.POST("/login", h.Login)
+		auth.GET("/verify", h.VerifyEmail)
+	}
+
+}
+
 func (h *AuthHandler) Register(c *gin.Context) {
 	var req models.RegisterRequest
 

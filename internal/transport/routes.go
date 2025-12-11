@@ -14,14 +14,17 @@ func RegisterRoutes(
 	projectService service.ProjectService,
 	reportService service.ReportService,
 	chatService service.ChatService,
+	userService service.UserService,
 ) {
 	taskHandler := NewTaskHandler(taskService, logger)
 	projectHandler := NewProjectHandler(projectService, logger)
 	reportHandler := NewReportHandler(reportService, logger)
 	chatHandler := NewChatHandler(chatService, logger)
+	userHandler := NewUserHandler(userService, logger)
 
 	chatHandler.SetupChatRoutes(router)
 	reportHandler.RegisterRoutes(router)
 	taskHandler.RegisterRoutes(router)
 	projectHandler.RegisterRoutes(router)
+	userHandler.RegisterRoutes(router)
 }

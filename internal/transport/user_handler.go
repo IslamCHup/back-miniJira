@@ -1,10 +1,11 @@
 package transport
 
 import (
+	"log/slog"
 	"net/http"
 	"strconv"
-	"log/slog"
 
+	"back-minijira-petproject1/internal/middleware"
 	"back-minijira-petproject1/internal/models"
 	"back-minijira-petproject1/internal/service"
 
@@ -21,6 +22,28 @@ func NewUserHandler(service service.UserService, logger *slog.Logger) *UserHandl
 		service: service,
 		logger:  logger,
 	}
+}
+
+func (h *UserHandler) RegisterRoutes(r *gin.Engine) {
+	users := r.Group("/users")
+
+	{
+		users.POST("/", h.CreateUser)
+	}
+
+	authUsers := r.Group("/users")
+	authUsers.Use(middleware.AuthMiddleware(userRepo))
+	{
+		authUsers.GET("/:id", h.GetUserByID)
+		authUsers.PATCH("/:id", h.UpdateUser)
+	}
+
+	adminUsers := r.Group("/admin/users")
+	adminUsers.Use(middleware.AuthMiddleware(userRepo), middleware.RequireAdmin())
+	{
+		adminUsers.DELETE("/:id", h.DeleteUser)
+	}
+
 }
 
 func (h *UserHandler) GetUserByID(c *gin.Context) {

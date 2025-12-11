@@ -3,7 +3,6 @@ package main
 import (
 	"back-minijira-petproject1/internal/config"
 	"back-minijira-petproject1/internal/logging"
-	"back-minijira-petproject1/internal/middleware"
 	"back-minijira-petproject1/internal/models"
 	"back-minijira-petproject1/internal/repository"
 	"back-minijira-petproject1/internal/service"
@@ -27,49 +26,20 @@ func main() {
 	taskRepo := repository.NewTaskRepository(db, logger)
 	userRepo := repository.NewUserRepository(db, logger)
 	reportRepo := repository.NewReportRepository(db, logger)
+	chatRepo := repository.NewChatRepositoryGorm(db)
+
 
 	projectService := service.NewProjectService(db, logger, projectRepo)
 	taskService := service.NewTaskService(db, logger, taskRepo, projectRepo)
 	userService := service.NewUserService(userRepo, db, logger)
-	authService := service.NewAuthService(userRepo, logger)
 	reportService := service.NewReportService(reportRepo, logger)
-
-	userHandler := transport.NewUserHandler(userService, logger)
-	authHandler := transport.NewAuthHandler(authService, logger)
-
-	fmt.Println(projectService, taskService, reportService)
+	chatService := service.NewChatService(chatRepo, logger)
 
 	r := gin.Default()
 
-
-	r.GET("/health", func(c *gin.Context) {
-		c.JSON(200, gin.H{"status": "ok"})
-	})
-
-	auth := r.Group("/auth")
-	{
-		auth.POST("/register", authHandler.Register)
-		auth.POST("/login", authHandler.Login)
-		auth.GET("/verify", authHandler.VerifyEmail)
-	}
-
-	users := r.Group("/users")
-	{
-		users.POST("/", userHandler.CreateUser)
-	}
-
-	authUsers := r.Group("/users")
-	authUsers.Use(middleware.AuthMiddleware(userRepo))
-	{
-		authUsers.GET("/:id", userHandler.GetUserByID)
-		authUsers.PATCH("/:id", userHandler.UpdateUser)
-	}
-
-	adminUsers := r.Group("/admin/users")
-	adminUsers.Use(middleware.AuthMiddleware(userRepo), middleware.RequireAdmin())
-	{
-		adminUsers.DELETE("/:id", userHandler.DeleteUser)
-	}
+	transport.RegisterRoutes(
+		r, logger, taskService, projectService, reportService, chatService, userService,
+	)
 
 	logger.Info("Server running on :8080")
 
