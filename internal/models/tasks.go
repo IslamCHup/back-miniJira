@@ -21,6 +21,8 @@ type TaskCreateReq struct {
 	Description string     `json:"description"`
 	Status      string     `json:"status" binding:"required,oneof=todo in_progress done"`
 	ProjectID   uint       `json:"project_id"`
+	// поддержка camelCase от фронта
+	ProjectId   uint       `json:"projectId"`
 	Users       []User     `json:"users"`
 	Priority    int        `json:"priority"`
 	LimitUser   int        `json:"limit"`

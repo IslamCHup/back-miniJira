@@ -1,0 +1,341 @@
+<!DOCTYPE html>
+<html lang="ru">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mini-Jira</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+
+<body>
+    <!-- Auth Screen -->
+    <div id="auth-screen" class="screen">
+        <div class="auth-container">
+            <h1>Mini-Jira</h1>
+
+            <!-- Login Form -->
+            <div id="login-form" class="auth-form">
+                <h2>Вход</h2>
+                <form id="login-form-element">
+                    <div class="form-group">
+                        <label for="login-email">Email</label>
+                        <input type="email" id="login-email" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="login-password">Пароль</label>
+                        <input type="password" id="login-password" required>
+                    </div>
+                    <button type="submit" class="btn btn-primary">Войти</button>
+                </form>
+                <p class="auth-switch">
+                    Нет аккаунта? <a href="#" id="show-register">Зарегистрироваться</a>
+                </p>
+                <div id="login-error" class="error-message"></div>
+            </div>
+
+            <!-- Register Form -->
+            <div id="register-form" class="auth-form" style="display: none;">
+                <h2>Регистрация</h2>
+                <form id="register-form-element">
+                    <div class="form-group">
+                        <label for="register-fullname">Полное имя</label>
+                        <input type="text" id="register-fullname" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="register-email">Email</label>
+                        <input type="email" id="register-email" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="register-password">Пароль</label>
+                        <input type="password" id="register-password" required>
+                    </div>
+                    <button type="submit" class="btn btn-primary">Зарегистрироваться</button>
+                </form>
+                <p class="auth-switch">
+                    Уже есть аккаунт? <a href="#" id="show-login">Войти</a>
+                </p>
+                <div id="register-error" class="error-message"></div>
+                <div id="register-success" class="success-message"></div>
+            </div>
+
+            <!-- Email Verification Form -->
+            <div id="verify-form" class="auth-form" style="display: none;">
+                <h2>Подтверждение Email</h2>
+                <p>Проверьте вашу почту и введите код подтверждения из письма.</p>
+                <form id="verify-form-element">
+                    <div class="form-group">
+                        <label for="verify-token">Код подтверждения</label>
+                        <input type="text" id="verify-token" placeholder="Вставьте токен из ссылки в письме" required>
+                    </div>
+                    <button type="submit" class="btn btn-primary">Подтвердить</button>
+                </form>
+                <p class="auth-switch">
+                    <a href="#" id="back-to-login">Вернуться к входу</a>
+                </p>
+                <div id="verify-error" class="error-message"></div>
+                <div id="verify-success" class="success-message"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main App Screen -->
+    <div id="app-screen" class="screen" style="display: none;">
+        <header class="app-header">
+            <h1>Mini-Jira</h1>
+            <button id="logout-btn" class="btn btn-secondary">Выйти</button>
+        </header>
+
+        <main class="app-main">
+            <!-- Projects List View -->
+            <div id="projects-view" class="view">
+                <div class="view-header">
+                    <h2>Проекты</h2>
+                    <button id="create-project-btn" class="btn btn-primary" style="display: none;">+ Создать
+                        проект</button>
+                </div>
+                <div id="projects-list" class="projects-grid">
+                    <!-- Projects will be loaded here -->
+                </div>
+            </div>
+
+            <!-- Create Project Modal -->
+            <div id="create-project-modal" class="modal" style="display: none;">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h2>Создать проект</h2>
+                        <button class="modal-close" id="close-create-modal">&times;</button>
+                    </div>
+                    <form id="create-project-form">
+                        <div class="form-group">
+                            <label for="project-title-input">Название проекта *</label>
+                            <input type="text" id="project-title-input" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="project-description-input">Описание</label>
+                            <textarea id="project-description-input" rows="4"></textarea>
+                        </div>
+                        <div class="form-group">
+                            <label for="project-status-input">Статус</label>
+                            <select id="project-status-input">
+                                <option value="active">Активный</option>
+                                <option value="inactive">Неактивный</option>
+                                <option value="completed">Завершен</option>
+                            </select>
+                        </div>
+                        <div class="form-actions">
+                            <button type="button" class="btn btn-secondary" id="cancel-create-project">Отмена</button>
+                            <button type="submit" class="btn btn-primary">Создать</button>
+                        </div>
+                        <div id="create-project-error" class="error-message"></div>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Project Detail View -->
+            <div id="project-view" class="view" style="display: none;">
+                <div class="view-header">
+                    <button id="back-to-projects" class="btn btn-link">← Назад к проектам</button>
+                    <div style="flex: 1;">
+                        <h2 id="project-title"></h2>
+                    </div>
+                    <div id="project-actions" style="display: none;">
+                        <button id="edit-project-btn" class="btn btn-secondary">Редактировать</button>
+                        <button id="delete-project-btn" class="btn btn-secondary"
+                            style="background-color: #de350b; margin-left: 10px;">Удалить</button>
+                    </div>
+                </div>
+                <div id="project-info" class="project-info">
+                    <div class="info-section">
+                        <h3>Описание</h3>
+                        <p id="project-description"></p>
+                    </div>
+                    <div class="info-section">
+                        <h3>Статус</h3>
+                        <span id="project-status" class="status-badge"></span>
+                    </div>
+                </div>
+                <div class="tasks-section">
+                    <div
+                        style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                        <h3 style="margin: 0;">Задачи проекта</h3>
+                        <button id="create-task-btn" class="btn btn-primary" style="display: none;">+ Создать
+                            задачу</button>
+                    </div>
+                    <div id="project-tasks-list" class="tasks-list">
+                        <!-- Tasks will be loaded here -->
+                    </div>
+                </div>
+                <div class="reports-section" style="margin-top: 30px;">
+                    <h3>Отчеты</h3>
+                    <div id="reports-content" class="reports-grid">
+                        <!-- Reports will be loaded here -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- Task Detail View -->
+            <div id="task-view" class="view" style="display: none;">
+                <div class="view-header">
+                    <button id="back-to-project" class="btn btn-link">← Назад к проекту</button>
+                    <div style="flex: 1;">
+                        <h2 id="task-title"></h2>
+                    </div>
+                    <div id="task-actions" style="display: none;">
+                        <button id="edit-task-btn" class="btn btn-secondary">Редактировать</button>
+                        <button id="delete-task-btn" class="btn btn-secondary"
+                            style="background-color: #de350b; margin-left: 10px;">Удалить</button>
+                    </div>
+                </div>
+                <div id="task-info" class="task-info">
+                    <div class="info-section">
+                        <h3>Описание</h3>
+                        <p id="task-description"></p>
+                    </div>
+                    <div class="info-row">
+                        <div class="info-item">
+                            <h3>Статус</h3>
+                            <span id="task-status" class="status-badge"></span>
+                        </div>
+                        <div class="info-item">
+                            <h3>Приоритет</h3>
+                            <span id="task-priority"></span>
+                        </div>
+                    </div>
+                    <div class="info-section">
+                        <h3>Участники</h3>
+                        <div id="task-users" class="users-list">
+                            <!-- Users will be loaded here -->
+                        </div>
+                    </div>
+                </div>
+                <div class="chat-section">
+                    <h3>Чат задачи</h3>
+                    <div id="chat-messages" class="chat-messages">
+                        <!-- Messages will be loaded here -->
+                    </div>
+                    <div id="chat-input-container" class="chat-input-container" style="display: none;">
+                        <form id="chat-form">
+                            <textarea id="chat-input" placeholder="Введите сообщение..." rows="3"></textarea>
+                            <button type="submit" class="btn btn-primary">Отправить</button>
+                        </form>
+                    </div>
+                    <div id="chat-no-access" class="info-message" style="display: none;">
+                        Вы не являетесь участником этой задачи и не можете отправлять сообщения.
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Edit Project Modal -->
+    <div id="edit-project-modal" class="modal" style="display: none;">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Редактировать проект</h2>
+                <button class="modal-close" id="close-edit-project-modal">&times;</button>
+            </div>
+            <form id="edit-project-form">
+                <div class="form-group">
+                    <label for="edit-project-title-input">Название проекта *</label>
+                    <input type="text" id="edit-project-title-input" required>
+                </div>
+                <div class="form-group">
+                    <label for="edit-project-description-input">Описание</label>
+                    <textarea id="edit-project-description-input" rows="4"></textarea>
+                </div>
+                <div class="form-group">
+                    <label for="edit-project-status-input">Статус</label>
+                    <select id="edit-project-status-input">
+                        <option value="active">Активный</option>
+                        <option value="inactive">Неактивный</option>
+                        <option value="completed">Завершен</option>
+                    </select>
+                </div>
+                <div class="form-actions">
+                    <button type="button" class="btn btn-secondary" id="cancel-edit-project">Отмена</button>
+                    <button type="submit" class="btn btn-primary">Сохранить</button>
+                </div>
+                <div id="edit-project-error" class="error-message"></div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Create Task Modal -->
+    <div id="create-task-modal" class="modal" style="display: none;">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Создать задачу</h2>
+                <button class="modal-close" id="close-create-task-modal">&times;</button>
+            </div>
+            <form id="create-task-form">
+                <div class="form-group">
+                    <label for="task-title-input">Название задачи *</label>
+                    <input type="text" id="task-title-input" required>
+                </div>
+                <div class="form-group">
+                    <label for="task-description-input">Описание</label>
+                    <textarea id="task-description-input" rows="4"></textarea>
+                </div>
+                <div class="form-group">
+                    <label for="task-status-input">Статус *</label>
+                    <select id="task-status-input" required>
+                        <option value="todo">To Do</option>
+                        <option value="in_progress">In Progress</option>
+                        <option value="done">Done</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="task-priority-input">Приоритет</label>
+                    <input type="number" id="task-priority-input" value="0" min="0" max="10">
+                </div>
+                <div class="form-actions">
+                    <button type="button" class="btn btn-secondary" id="cancel-create-task">Отмена</button>
+                    <button type="submit" class="btn btn-primary">Создать</button>
+                </div>
+                <div id="create-task-error" class="error-message"></div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Edit Task Modal -->
+    <div id="edit-task-modal" class="modal" style="display: none;">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Редактировать задачу</h2>
+                <button class="modal-close" id="close-edit-task-modal">&times;</button>
+            </div>
+            <form id="edit-task-form">
+                <div class="form-group">
+                    <label for="edit-task-title-input">Название задачи *</label>
+                    <input type="text" id="edit-task-title-input" required>
+                </div>
+                <div class="form-group">
+                    <label for="edit-task-description-input">Описание</label>
+                    <textarea id="edit-task-description-input" rows="4"></textarea>
+                </div>
+                <div class="form-group">
+                    <label for="edit-task-status-input">Статус</label>
+                    <select id="edit-task-status-input">
+                        <option value="todo">To Do</option>
+                        <option value="in_progress">In Progress</option>
+                        <option value="done">Done</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="edit-task-priority-input">Приоритет</label>
+                    <input type="number" id="edit-task-priority-input" min="0" max="10">
+                </div>
+                <div class="form-actions">
+                    <button type="button" class="btn btn-secondary" id="cancel-edit-task">Отмена</button>
+                    <button type="submit" class="btn btn-primary">Сохранить</button>
+                </div>
+                <div id="edit-task-error" class="error-message"></div>
+            </form>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+
+</html>

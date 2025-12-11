@@ -28,11 +28,11 @@ func (r *reportRepo) GetTopWorkers(projectID uint) ([]models.WorkerStats, error)
 	var result []models.WorkerStats
 
 	err := r.db.Model(&models.Task{}).
-		Select("users.id as user_id, users.name as name, COUNT(tasks.id) as completed_tasks").
+		Select("users.id as user_id, users.full_name as name, COUNT(tasks.id) as completed_tasks").
 		Joins("JOIN task_users tu ON tu.task_id = tasks.id").
 		Joins("JOIN users ON users.id = tu.user_id").
 		Where("tasks.project_id = ? AND tasks.status = 'done'", projectID).
-		Group("users.id, users.name").
+		Group("users.id, users.full_name").
 		Order("completed_tasks DESC").
 		Scan(&result).Error
 
