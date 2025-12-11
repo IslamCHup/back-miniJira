@@ -1,6 +1,7 @@
 package transport
 
 import (
+	"back-minijira-petproject1/internal/middleware"
 	"back-minijira-petproject1/internal/service"
 	"log/slog"
 	"net/http"
@@ -17,13 +18,14 @@ func NewReportHandler(s service.ReportService, logger *slog.Logger) *ReportHandl
 	return &ReportHandler{service: s}
 }
 
-func (h *ReportHandler) RegisterRoutes(r *gin.Engine) {
-	reports := r.Group("/projects/:id/reports")
+func (h *ReportHandler) RegisterRoutes(r *gin.Engine,authService service.AuthService) {
+	authReports := r.Group("/projects/:id/reports")
+	authReports.Use(middleware.AuthMiddleware(authService))
 	{
-		reports.GET("/top-workers", h.GetTopWorkers)
-		reports.GET("/avg-time", h.GetAverageTime)
-		reports.GET("/completion-percent", h.GetCompletionPercent)
-		reports.GET("/user-tracker/:userId", h.GetUserTracker)
+		authReports.GET("/top-workers", h.GetTopWorkers)
+		authReports.GET("/avg-time", h.GetAverageTime)
+		authReports.GET("/completion-percent", h.GetCompletionPercent)
+		authReports.GET("/user-tracker/:userId", h.GetUserTracker)
 	}
 }
 

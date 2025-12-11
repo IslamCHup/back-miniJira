@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"net/smtp"
 	"os"
+
+	"github.com/joho/godotenv"
 )
 
 type EmailService struct {
@@ -16,6 +18,11 @@ type EmailService struct {
 }
 
 func NewEmailService() *EmailService {
+	err := godotenv.Load("../../.env")
+	if err != nil {
+		panic(err)
+	}
+	
 	return &EmailService{
 		host: os.Getenv("SMTP_HOST"),
 		port: os.Getenv("SMTP_PORT"),

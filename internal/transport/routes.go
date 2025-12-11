@@ -24,14 +24,14 @@ func RegisterRoutes(
 	reportHandler := NewReportHandler(reportService, logger)
 	chatHandler := NewChatHandler(chatService, logger)
 	userHandler := NewUserHandler(userService, logger)
-	authHandler := NewAuthHandler(&authService, logger)
+	authHandler := NewAuthHandler(authService, logger)
 	
 
-	chatHandler.SetupChatRoutes(router)
-	reportHandler.RegisterRoutes(router)
-	taskHandler.RegisterRoutes(router)
-	projectHandler.RegisterRoutes(router)
-	userHandler.RegisterRoutes(router, userRepo)
+	chatHandler.SetupChatRoutes(router,authService)
+	reportHandler.RegisterRoutes(router,authService)
+	taskHandler.RegisterRoutes(router,authService)
+	projectHandler.RegisterRoutes(router,authService)
+	userHandler.RegisterRoutes(router, authService)
 	authHandler.SetupRoutes(router)
 	
 }

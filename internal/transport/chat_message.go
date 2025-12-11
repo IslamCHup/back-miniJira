@@ -1,6 +1,7 @@
 package transport
 
 import (
+	"back-minijira-petproject1/internal/middleware"
 	"back-minijira-petproject1/internal/models"
 	"back-minijira-petproject1/internal/service"
 	"log/slog"
@@ -20,11 +21,12 @@ func NewChatHandler(chatService service.ChatService, logger *slog.Logger) *ChatH
 	return &ChatHandler{chatService: chatService, logger: logger}
 }
 
-func (h *ChatHandler) SetupChatRoutes(r *gin.Engine) {
-	chat := r.Group("/chat/:type/:id") // type = "projects" | "tasks"
+func (h *ChatHandler) SetupChatRoutes(r *gin.Engine,authService service.AuthService) {
+	authChat := r.Group("/chat/:type/:id") // type = "projects" | "tasks"
+	authChat.Use(middleware.AuthMiddleware(authService))
 	{
-		chat.POST("/", h.AddMessage)
-		chat.GET("/", h.GetMessages)
+		authChat.POST("/", h.AddMessage)
+		authChat.GET("/", h.GetMessages)
 	}
 
 }

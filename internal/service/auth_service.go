@@ -13,21 +13,34 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
-type AuthService struct {
+type AuthService interface {
+	Register(req models.RegisterRequest) error
+	Login(req models.LoginRequest) (string, error)
+	GetUserByID(id uint) (models.User, error)
+	VerifyEmail(token string) error
+}
+
+type authService struct {
 	repo         repository.UserRepository
 	logger       *slog.Logger
 	emailService *EmailService
 }
 
-func NewAuthService(repo repository.UserRepository, logger *slog.Logger) *AuthService {
-	return &AuthService{repo: repo, logger: logger, emailService: NewEmailService()}
+func NewAuthService(repo repository.UserRepository, logger *slog.Logger) AuthService {
+	return &authService{repo: repo, logger: logger, emailService: NewEmailService()}
 }
 
-func (s *AuthService) Register(req models.RegisterRequest) error {
+func (s *authService) Register(req models.RegisterRequest) error {
 	if exisiting, _ := s.repo.GetUserByEmail(req.Email); exisiting.ID != 0 {
 		return errors.New("пользователь с таким емайлом уже есть")
 
 	}
+
+	  count, err := s.repo.CountUsers()
+    if err != nil {
+        return err
+    }
+
 
 	hash, _ := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
 
@@ -39,6 +52,7 @@ func (s *AuthService) Register(req models.RegisterRequest) error {
 		PasswordHash: string(hash),
 		IsVerified:   false,
 		VerifyToken:  verifyToken,
+		IsAdmin:      count == 0,
 	}
 
 	if err := s.repo.CreateUser(&user); err != nil {
@@ -54,7 +68,7 @@ func (s *AuthService) Register(req models.RegisterRequest) error {
 	return nil
 }
 
-func (s *AuthService) Login(req models.LoginRequest) (string, error) {
+func (s *authService) Login(req models.LoginRequest) (string, error) {
 	user, err := s.repo.GetUserByEmail(req.Email)
 	if err != nil {
 		return "", errors.New("invalid email or password")
@@ -71,7 +85,7 @@ func (s *AuthService) Login(req models.LoginRequest) (string, error) {
 	return auth.GenerateToken(user.ID, user.IsAdmin)
 }
 
-func (s *AuthService) VerifyEmail(token string) error {
+func (s *authService) VerifyEmail(token string) error {
 	user, err := s.repo.GetUserVerifyToken(token)
 	if err != nil {
 		return errors.New("invalid or expired token")
@@ -81,4 +95,9 @@ func (s *AuthService) VerifyEmail(token string) error {
 	user.VerifyToken = ""
 
 	return s.repo.UpdateUserVerification(user.ID, user.IsVerified, user.VerifyToken)
+}
+
+func (s *authService) GetUserByID(id uint) (models.User, error) {
+	user, _, err := s.repo.GetUserByID(id)
+	return user, err
 }

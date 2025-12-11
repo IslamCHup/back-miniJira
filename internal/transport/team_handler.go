@@ -1,6 +1,7 @@
 package transport
 
 import (
+	"back-minijira-petproject1/internal/middleware"
 	"back-minijira-petproject1/internal/models"
 	"back-minijira-petproject1/internal/service"
 	"log/slog"
@@ -18,6 +19,25 @@ type TeamHandler struct {
 func NewTeamHandler(service service.TeamService, logger *slog.Logger) *TeamHandler {
 	return &TeamHandler{service: service, logger: logger}
 }
+
+func (h *TeamHandler) RegisterRoutes(r *gin.Engine, authService service.AuthService,
+) {
+
+	authTeams := r.Group("/teams")
+	authTeams.Use(middleware.AuthMiddleware(authService))
+	{
+		authTeams.GET("/:id", h.GetByID)
+		authTeams.PATCH("/:id", h.Update)
+	}
+
+	adminTeams := r.Group("/admin/teams")
+	adminTeams.Use(middleware.AuthMiddleware(authService), middleware.RequireAdmin())
+	{
+		adminTeams.DELETE("/:id", h.Delete)
+	}
+
+}
+
 
 func (h *TeamHandler) Create(c *gin.Context) {
 	var req models.TeamCreateReq

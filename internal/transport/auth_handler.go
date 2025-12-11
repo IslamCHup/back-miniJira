@@ -10,11 +10,11 @@ import (
 )
 
 type AuthHandler struct {
-	service *service.AuthService
+	service service.AuthService
 	logger  *slog.Logger
 }
 
-func NewAuthHandler(service *service.AuthService, logger *slog.Logger) *AuthHandler {
+func NewAuthHandler(service service.AuthService, logger *slog.Logger) *AuthHandler {
 	return &AuthHandler{service: service, logger: logger}
 }
 
@@ -75,3 +75,4 @@ func (h *AuthHandler) VerifyEmail(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{"message": "email verified successfully"})
 }
+

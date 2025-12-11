@@ -1,6 +1,7 @@
 package transport
 
 import (
+	"back-minijira-petproject1/internal/middleware"
 	"back-minijira-petproject1/internal/models"
 	"back-minijira-petproject1/internal/service"
 	"log/slog"
@@ -19,18 +20,24 @@ func NewProjectHandler(service service.ProjectService, logger *slog.Logger) Proj
 	return ProjectHandler{service: service, logger: logger}
 }
 
-// ...existing code...
-func (h *ProjectHandler) RegisterRoutes(r *gin.Engine) {
-    projects := r.Group("/projects")
-    {
-        projects.GET("/", h.ListProjects)
-        projects.GET("/:id", h.GetByID)
-        projects.POST("/", h.Create)
-        projects.PATCH("/:id", h.UpdateProject)
-        projects.DELETE("/:id", h.Delete)
-    }
+func (h *ProjectHandler) RegisterRoutes(r *gin.Engine, authService service.AuthService) {
+
+	auth := r.Group("/projects")
+	auth.Use(middleware.AuthMiddleware(authService))
+	{
+		auth.GET("/", h.ListProjects)
+		auth.GET("/:id", h.GetByID)
+
+	}
+
+	admin := r.Group("/admin/projects")
+	admin.Use(middleware.AuthMiddleware(authService), middleware.RequireAdmin())
+	{
+		admin.POST("/", h.Create)
+		admin.PATCH("/:id", h.UpdateProject)
+		admin.DELETE("/:id", h.Delete)
+	}
 }
-// ...existing code...
 
 func (h *ProjectHandler) ListProjects(c *gin.Context) {
 	title := c.Query("title")
