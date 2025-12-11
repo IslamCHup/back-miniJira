@@ -1,6 +1,7 @@
 package transport
 
 import (
+	"back-minijira-petproject1/internal/middleware"
 	"back-minijira-petproject1/internal/models"
 	"back-minijira-petproject1/internal/service"
 	"log/slog"
@@ -20,14 +21,19 @@ func NewTaskHandler(service service.TaskService, logger *slog.Logger) TaskHandle
 	return TaskHandler{service: service, logger: logger}
 }
 
-func (h *TaskHandler) RegisterRoutes(r *gin.Engine) {
-	tasks := r.Group("/tasks")
+func (h *TaskHandler) RegisterRoutes(r *gin.Engine,authService service.AuthService) {
+	authTasks := r.Group("/tasks")
+	authTasks.Use(middleware.AuthMiddleware(authService))
 	{
-		tasks.GET("/", h.ListTasks)
-		tasks.GET("/:id", h.GetTaskByID)
-		tasks.POST("/", h.Create)
-		tasks.PATCH("/:id", h.Update)
-		tasks.DELETE("/:id", h.DeleteTask)
+		authTasks.GET("/", h.ListTasks)
+		authTasks.GET("/:id", h.GetTaskByID)
+	}
+	adminTasks := r.Group("/admin/tasks")
+	adminTasks.Use(middleware.AuthMiddleware(authService),middleware.RequireAdmin())
+	{
+		adminTasks.POST("/", h.Create)
+		adminTasks.PATCH("/:id", h.Update)
+		adminTasks.DELETE("/:id", h.DeleteTask)
 	}
 }
 

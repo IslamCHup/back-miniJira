@@ -7,7 +7,6 @@ import (
 
 	"back-minijira-petproject1/internal/middleware"
 	"back-minijira-petproject1/internal/models"
-	"back-minijira-petproject1/internal/repository"
 	"back-minijira-petproject1/internal/service"
 
 	"github.com/gin-gonic/gin"
@@ -25,23 +24,18 @@ func NewUserHandler(service service.UserService, logger *slog.Logger) *UserHandl
 	}
 }
 
-func (h *UserHandler) RegisterRoutes(r *gin.Engine, userRepo repository.UserRepository,
+func (h *UserHandler) RegisterRoutes(r *gin.Engine, authService service.AuthService,
 ) {
-	users := r.Group("/users")
-
-	{
-		users.POST("/", h.CreateUser)
-	}
 
 	authUsers := r.Group("/users")
-	authUsers.Use(middleware.AuthMiddleware(userRepo))
+	authUsers.Use(middleware.AuthMiddleware(authService))
 	{
 		authUsers.GET("/:id", h.GetUserByID)
 		authUsers.PATCH("/:id", h.UpdateUser)
 	}
 
 	adminUsers := r.Group("/admin/users")
-	adminUsers.Use(middleware.AuthMiddleware(userRepo), middleware.RequireAdmin())
+	adminUsers.Use(middleware.AuthMiddleware(authService), middleware.RequireAdmin())
 	{
 		adminUsers.DELETE("/:id", h.DeleteUser)
 	}

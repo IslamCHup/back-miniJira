@@ -17,6 +17,7 @@ func main() {
 
 	db := config.SetUpDatabaseConnection(logger)
 
+	//db.Migrator().DropTable(&models.User{})
 	if err := db.AutoMigrate(&models.Project{}, &models.Task{}, &models.User{}); err != nil {
 		logger.Error("ошибка при выполнении автомиграции", "error", err)
 		panic(fmt.Sprintf("не удалось выполнит миграции:%v", err))
@@ -38,7 +39,7 @@ func main() {
 	r := gin.Default()
 
 	transport.RegisterRoutes(
-		r, logger, taskService, projectService, reportService, chatService, userService, *authService,userRepo,
+		r, logger, taskService, projectService, reportService, chatService, userService, authService,userRepo,
 	)
 
 	logger.Info("Server running on :8080")

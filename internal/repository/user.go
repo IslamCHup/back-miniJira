@@ -17,6 +17,7 @@ type UserRepository interface {
 	GetUserByEmail(email string) (models.User, error)
 	GetUserVerifyToken(token string) (models.User, error)
 	UpdateUserVerification(id uint, isVerified bool, token string) error
+	CountUsers() (int64, error)
 }
 
 
@@ -125,4 +126,12 @@ func (r *userRepository) UpdateUserVerification(id uint, isVerified bool, token 
 			"is_verified":  isVerified,
 			"verify_token": token,
 		}).Error
+}
+
+func (r *userRepository) CountUsers() (int64, error) {
+    var count int64
+    if err := r.db.Model(&models.User{}).Count(&count).Error; err != nil {
+        return 0, err
+    }
+    return count, nil
 }

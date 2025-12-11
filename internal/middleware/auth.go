@@ -2,14 +2,14 @@ package middleware
 
 import (
 	"back-minijira-petproject1/internal/auth"
-	"back-minijira-petproject1/internal/repository"
+	"back-minijira-petproject1/internal/service"
 	"net/http"
 	"strings"
 
 	"github.com/gin-gonic/gin"
 )
 
-func AuthMiddleware(repo repository.UserRepository) gin.HandlerFunc {
+func AuthMiddleware(authService service.AuthService) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		authHeader := c.GetHeader("Authorization")
 
@@ -34,7 +34,7 @@ func AuthMiddleware(repo repository.UserRepository) gin.HandlerFunc {
 			c.Abort()
 			return
 		}
-		user, _, err := repo.GetUserByID(claims.UserID)
+		user, err := authService.GetUserByID(claims.UserID)
 
 		if err != nil {
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "user not found"})
