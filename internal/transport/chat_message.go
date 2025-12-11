@@ -21,7 +21,7 @@ func NewChatHandler(chatService service.ChatService, logger *slog.Logger) *ChatH
 	return &ChatHandler{chatService: chatService, logger: logger}
 }
 
-func (h *ChatHandler) SetupChatRoutes(r *gin.Engine,authService service.AuthService) {
+func (h *ChatHandler) SetupChatRoutes(r *gin.Engine, authService service.AuthService) {
 	authChat := r.Group("/chat/:type/:id") // type = "projects" | "tasks"
 	authChat.Use(middleware.AuthMiddleware(authService))
 	{
@@ -45,7 +45,6 @@ func (h *ChatHandler) AddMessage(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-
 
 	if chatType == "tasks" {
 		hasAccess, err := h.chatService.CanUserAccessTask(c.Request.Context(), uint(chatID), input.UserID)
