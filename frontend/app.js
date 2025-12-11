@@ -7,6 +7,7 @@ let currentProjectId = null;
 let currentTaskId = null;
 let chatPollInterval = null;
 let isAdmin = false;
+const userCache = {}; // Кэш для пользователей
 
 // ==================== API Functions ====================
 
@@ -733,7 +734,24 @@ function createTaskCard(task) {
 // ==================== Task Functions ====================
 
 async function showTask(taskId) {
-    currentTaskId = taskId;
+    console.log('showTask called with ID:', taskId, 'type:', typeof taskId);
+    
+    if (!taskId) {
+        console.error('Task ID is missing!');
+        alert('Ошибка: ID задачи не указан');
+        return;
+    }
+
+    // Преобразуем в число, если это строка
+    const numericId = typeof taskId === 'string' ? parseInt(taskId, 10) : taskId;
+    if (isNaN(numericId)) {
+        console.error('Task ID is not a valid number!', taskId);
+        alert('Ошибка: ID задачи должен быть числом');
+        return;
+    }
+
+    currentTaskId = numericId;
+    console.log('Current task ID set to:', currentTaskId);
     stopChatPolling();
 
     // Hide project view, show task view
@@ -746,8 +764,19 @@ async function showTask(taskId) {
     if (taskActions) taskActions.style.display = isAdmin ? 'flex' : 'none';
 
     try {
-        const response = await tasksAPI.getTaskById(taskId);
+        console.log('Fetching task with ID:', numericId);
+        const response = await tasksAPI.getTaskById(numericId);
+        console.log('Task response status:', response.status, response.ok);
+        
+        if (!response.ok) {
+            const errorText = await response.text().catch(() => 'Unknown error');
+            console.error('Failed to load task:', response.status, errorText);
+            alert('Ошибка при загрузке задачи');
+            return;
+        }
+
         const task = await response.json();
+        console.log('Task data loaded:', task);
 
         if (response.ok) {
             document.getElementById('task-title').textContent = task.title || 'Без названия';
@@ -776,12 +805,13 @@ async function showTask(taskId) {
             const chatInputContainer = document.getElementById('chat-input-container');
             const chatNoAccess = document.getElementById('chat-no-access');
 
-            chatInputContainer.style.display = 'block';
-            chatNoAccess.style.display = 'none';
+            if (chatInputContainer) chatInputContainer.style.display = 'block';
+            if (chatNoAccess) chatNoAccess.style.display = 'none';
 
-            // Load chat messages
-            await loadChatMessages('tasks', taskId);
-            startChatPolling('tasks', taskId);
+            // Load chat messages (используем numericId, который мы установили в currentTaskId)
+            console.log('Loading chat for task ID:', currentTaskId);
+            await loadChatMessages('tasks', currentTaskId);
+            startChatPolling('tasks', currentTaskId);
         }
     } catch (error) {
         console.error('Error loading task:', error);
@@ -792,55 +822,178 @@ async function showTask(taskId) {
 
 async function loadChatMessages(type, id) {
     const messagesContainer = document.getElementById('chat-messages');
+    if (!messagesContainer) {
+        console.error('Chat messages container not found');
+        return;
+    }
+
+    if (!id) {
+        console.error('Chat ID is missing');
+        messagesContainer.innerHTML = '<div class="empty-state"><p>ID чата не указан</p></div>';
+        return;
+    }
 
     try {
+        console.log('Loading chat messages:', { type, id });
         const response = await chatAPI.getMessages(type, id);
-        const messages = await response.json();
+        console.log('Chat messages response status:', response.status, response.ok);
+        console.log('Response headers:', Object.fromEntries(response.headers.entries()));
 
-        if (response.ok) {
-            if (messages.length === 0) {
-                messagesContainer.innerHTML = '<div class="empty-state"><p>Нет сообщений</p></div>';
-            } else {
-                messagesContainer.innerHTML = '';
-                messages.forEach(message => {
-                    const messageElement = createChatMessage(message);
-                    messagesContainer.appendChild(messageElement);
-                });
-                messagesContainer.scrollTop = messagesContainer.scrollHeight;
+        if (!response.ok) {
+            let errorText = 'Unknown error';
+            try {
+                errorText = await response.text();
+            } catch (e) {
+                console.error('Failed to read error response:', e);
             }
+            console.error('Failed to load chat messages:', response.status, errorText);
+            
+            let errorMessage = 'Ошибка при загрузке сообщений';
+            try {
+                const errorData = JSON.parse(errorText);
+                if (errorData.error) {
+                    errorMessage = errorData.error;
+                }
+            } catch (e) {
+                // Если не JSON, используем текст как есть
+                if (errorText && errorText !== 'Unknown error') {
+                    errorMessage = errorText;
+                }
+            }
+            
+            messagesContainer.innerHTML = `<div class="empty-state"><p>${escapeHtml(errorMessage)}</p></div>`;
+            return;
+        }
+
+        // Парсим JSON ответ
+        let messages = [];
+        try {
+            messages = await response.json();
+            console.log('Chat messages parsed:', messages);
+        } catch (parseError) {
+            console.error('Failed to parse JSON response:', parseError);
+            console.error('Parse error details:', {
+                message: parseError.message,
+                name: parseError.name
+            });
+            messagesContainer.innerHTML = '<div class="empty-state"><p>Ошибка при обработке ответа сервера</p></div>';
+            return;
+        }
+
+        if (!Array.isArray(messages)) {
+            console.error('Messages is not an array:', messages, 'Type:', typeof messages);
+            messagesContainer.innerHTML = '<div class="empty-state"><p>Некорректный формат данных</p></div>';
+            return;
+        }
+
+        console.log('Messages count:', messages.length);
+        if (messages.length === 0) {
+            messagesContainer.innerHTML = '<div class="empty-state"><p>Нет сообщений</p></div>';
         } else {
-            messagesContainer.innerHTML = '<div class="empty-state"><p>Ошибка при загрузке сообщений</p></div>';
+            // Очищаем контейнер
+            messagesContainer.innerHTML = '';
+            
+            // Создаем все сообщения асинхронно
+            const messagePromises = messages.map(async (message, index) => {
+                try {
+                    console.log(`Processing message ${index}:`, message);
+                    const messageElement = await createChatMessage(message);
+                    return messageElement;
+                } catch (msgError) {
+                    console.error(`Error creating message element ${index}:`, msgError, message);
+                    // Создаем fallback элемент
+                    const fallbackDiv = document.createElement('div');
+                    fallbackDiv.className = 'chat-message';
+                    fallbackDiv.innerHTML = `
+                        <div class="chat-message-header">
+                            <span class="chat-message-author">Unknown</span>
+                            <span class="chat-message-time">N/A</span>
+                        </div>
+                        <div class="chat-message-text">${escapeHtml(message.text || message.Text || 'Ошибка загрузки сообщения')}</div>
+                    `;
+                    return fallbackDiv;
+                }
+            });
+
+            // Ждем все промисы и добавляем элементы
+            const messageElements = await Promise.all(messagePromises);
+            messageElements.forEach(element => {
+                if (element) {
+                    messagesContainer.appendChild(element);
+                }
+            });
+
+            // Прокручиваем вниз после добавления всех сообщений
+            setTimeout(() => {
+                messagesContainer.scrollTop = messagesContainer.scrollHeight;
+            }, 100);
         }
     } catch (error) {
         console.error('Error loading chat messages:', error);
-        messagesContainer.innerHTML = '<div class="empty-state"><p>Ошибка соединения с сервером</p></div>';
+        console.error('Error details:', {
+            message: error.message,
+            stack: error.stack,
+            name: error.name
+        });
+        
+        let errorMessage = 'Ошибка соединения с сервером';
+        if (error.message && error.message.includes('Failed to fetch')) {
+            errorMessage = 'Не удалось подключиться к серверу. Убедитесь, что сервер запущен на http://localhost:8080';
+        } else if (error.message) {
+            errorMessage = 'Ошибка: ' + error.message;
+        }
+        
+        messagesContainer.innerHTML = `<div class="empty-state"><p>${escapeHtml(errorMessage)}</p></div>`;
     }
 }
 
 async function createChatMessage(message) {
-    // We need user info - let's try to get it
+    // Поддерживаем оба варианта имен полей
+    const userId = message.user_id || message.userID || message.UserID;
+    const messageText = message.text || message.Text || '';
+    const createdAt = message.created_at || message.CreatedAt || message.createdAt;
+
+    if (!userId) {
+        console.error('Message missing user_id:', message);
+    }
+
+    // Используем кэш для пользователей
     let userName = 'Unknown';
-    try {
-        const userResponse = await usersAPI.getUserById(message.user_id);
-        if (userResponse.ok) {
-            const user = await userResponse.json();
-            userName = user.full_name || user.email || 'Unknown';
+    if (userId) {
+        if (userCache[userId]) {
+            userName = userCache[userId];
+        } else {
+            try {
+                const userResponse = await usersAPI.getUserById(userId);
+                if (userResponse.ok) {
+                    const user = await userResponse.json();
+                    userName = user.full_name || user.FullName || user.email || user.Email || 'Unknown';
+                    userCache[userId] = userName; // Кэшируем
+                }
+            } catch (error) {
+                console.error('Error loading user:', error, 'user_id:', userId);
+            }
         }
-    } catch (error) {
-        console.error('Error loading user:', error);
     }
 
     const messageDiv = document.createElement('div');
     messageDiv.className = 'chat-message';
 
-    const createdAt = message.created_at ? new Date(message.created_at).toLocaleString('ru-RU') : 'N/A';
+    let formattedDate = 'N/A';
+    if (createdAt) {
+        try {
+            formattedDate = new Date(createdAt).toLocaleString('ru-RU');
+        } catch (e) {
+            console.error('Error parsing date:', e, 'date:', createdAt);
+        }
+    }
 
     messageDiv.innerHTML = `
         <div class="chat-message-header">
             <span class="chat-message-author">${escapeHtml(userName)}</span>
-            <span class="chat-message-time">${createdAt}</span>
+            <span class="chat-message-time">${formattedDate}</span>
         </div>
-        <div class="chat-message-text">${escapeHtml(message.text)}</div>
+        <div class="chat-message-text">${escapeHtml(messageText)}</div>
     `;
 
     return messageDiv;
@@ -880,25 +1033,74 @@ async function handleSendMessage(e) {
         return;
     }
 
-    try {
-        const response = await chatAPI.sendMessage('tasks', currentTaskId, userId, text);
-        const data = await response.json();
+    if (!currentTaskId) {
+        alert('Задача не выбрана');
+        return;
+    }
 
-        if (response.ok) {
-            document.getElementById('chat-input').value = '';
-            await loadChatMessages('tasks', currentTaskId);
-        } else {
+    try {
+        console.log('Sending message:', { type: 'tasks', id: currentTaskId, userId, text });
+        const response = await chatAPI.sendMessage('tasks', currentTaskId, userId, text);
+        console.log('Message response status:', response.status, response.ok);
+
+        if (!response.ok) {
+            // Пытаемся получить текст ошибки
+            let errorMessage = 'Ошибка при отправке сообщения';
+            try {
+                const errorText = await response.text();
+                console.error('Error response:', errorText);
+                let errorData = {};
+                try {
+                    errorData = JSON.parse(errorText);
+                } catch (e) {
+                    // Если не JSON, используем текст как есть
+                    errorMessage = errorText || errorMessage;
+                }
+                if (errorData.error) {
+                    errorMessage = errorData.error;
+                }
+            } catch (e) {
+                console.error('Failed to read error response:', e);
+            }
+
             if (response.status === 403) {
                 // User doesn't have access
-                document.getElementById('chat-input-container').style.display = 'none';
-                document.getElementById('chat-no-access').style.display = 'block';
+                const chatInputContainer = document.getElementById('chat-input-container');
+                const chatNoAccess = document.getElementById('chat-no-access');
+                if (chatInputContainer) chatInputContainer.style.display = 'none';
+                if (chatNoAccess) chatNoAccess.style.display = 'block';
             } else {
-                alert(data.error || 'Ошибка при отправке сообщения');
+                alert(errorMessage);
             }
+            return;
         }
+
+        // Успешная отправка
+        const data = await response.json().catch(() => ({}));
+        console.log('Message sent successfully:', data);
+        
+        const chatInput = document.getElementById('chat-input');
+        if (chatInput) chatInput.value = '';
+        
+        // Перезагружаем сообщения сразу после отправки
+        console.log('Reloading chat messages after send...');
+        await loadChatMessages('tasks', currentTaskId);
     } catch (error) {
         console.error('Error sending message:', error);
-        alert('Ошибка соединения с сервером');
+        console.error('Error details:', {
+            message: error.message,
+            stack: error.stack,
+            name: error.name
+        });
+        
+        let errorMessage = 'Ошибка соединения с сервером';
+        if (error.message && error.message.includes('Failed to fetch')) {
+            errorMessage = 'Не удалось подключиться к серверу. Убедитесь, что сервер запущен на http://localhost:8080';
+        } else if (error.message) {
+            errorMessage = 'Ошибка: ' + error.message;
+        }
+        
+        alert(errorMessage);
     }
 }
 
