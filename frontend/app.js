@@ -8,6 +8,7 @@ let currentTaskId = null;
 let chatPollInterval = null;
 let isAdmin = false;
 const userCache = {}; // Кэш для пользователей
+let currentTaskData = null; // Храним исходные данные текущей задачи
 
 // ==================== API Functions ====================
 
@@ -169,10 +170,22 @@ const tasksAPI = {
     async updateTask(id, title, description, status, priority) {
         const token = localStorage.getItem('token');
         const body = {};
-        if (title !== null) body.title = title;
-        if (description !== null) body.description = description;
-        if (status !== null) body.status = status;
-        if (priority !== null) body.priority = priority;
+
+        // Отправляем только непустые значения
+        if (title !== null && title !== undefined && title.trim() !== '') {
+            body.title = title.trim();
+        }
+        if (description !== null && description !== undefined) {
+            body.description = description.trim();
+        }
+        if (status !== null && status !== undefined && status !== '') {
+            body.status = status;
+        }
+        if (priority !== null && priority !== undefined) {
+            body.priority = priority;
+        }
+
+        console.log('Update task request body:', body);
 
         const response = await fetch(`${API_BASE_URL}/admin/tasks/${id}`, {
             method: 'PATCH',
@@ -705,14 +718,14 @@ async function showProject(projectId) {
 function createTaskCard(task) {
     const card = document.createElement('div');
     card.className = 'task-card';
-    
+
     // Поддерживаем оба варианта имен полей
     const taskId = task.id || task.ID;
     const taskTitle = task.title || task.Title || 'Без названия';
     const taskDesc = task.description || task.Description || 'Нет описания';
     const taskStatus = task.status || task.Status || 'N/A';
     const taskPriority = task.priority || task.Priority || '';
-    
+
     card.innerHTML = `
         <h4>${escapeHtml(taskTitle)}</h4>
         <p>${escapeHtml(taskDesc)}</p>
@@ -735,7 +748,7 @@ function createTaskCard(task) {
 
 async function showTask(taskId) {
     console.log('showTask called with ID:', taskId, 'type:', typeof taskId);
-    
+
     if (!taskId) {
         console.error('Task ID is missing!');
         alert('Ошибка: ID задачи не указан');
@@ -767,7 +780,7 @@ async function showTask(taskId) {
         console.log('Fetching task with ID:', numericId);
         const response = await tasksAPI.getTaskById(numericId);
         console.log('Task response status:', response.status, response.ok);
-        
+
         if (!response.ok) {
             const errorText = await response.text().catch(() => 'Unknown error');
             console.error('Failed to load task:', response.status, errorText);
@@ -779,14 +792,42 @@ async function showTask(taskId) {
         console.log('Task data loaded:', task);
 
         if (response.ok) {
-            document.getElementById('task-title').textContent = task.title || 'Без названия';
-            document.getElementById('task-description').textContent = task.description || 'Нет описания';
+            // Сохраняем исходные данные задачи для редактирования
+            currentTaskData = task;
+
+            document.getElementById('task-title').textContent = task.title || task.Title || 'Без названия';
+            document.getElementById('task-description').textContent = task.description || task.Description || 'Нет описания';
 
             const statusBadge = document.getElementById('task-status');
-            statusBadge.textContent = task.status || 'N/A';
-            statusBadge.className = `status-badge ${getStatusClass(task.status)}`;
+            const taskStatus = task.status || task.Status || 'N/A';
+            statusBadge.textContent = taskStatus;
+            statusBadge.className = `status-badge ${getStatusClass(taskStatus)}`;
 
-            document.getElementById('task-priority').textContent = task.priority !== undefined ? task.priority : 'N/A';
+            // Отображаем приоритет
+            const priorityEl = document.getElementById('task-priority');
+            if (priorityEl) {
+                const priorityText = task.priority || task.Priority || 'N/A';
+                priorityEl.textContent = priorityText;
+
+                // Определяем исходное числовое значение приоритета из текста
+                let priorityNum = 0;
+                if (priorityText && priorityText !== 'N/A') {
+                    if (priorityText.includes('Очень важно')) {
+                        priorityNum = 2;
+                    } else if (priorityText.includes('Важно')) {
+                        priorityNum = 1;
+                    } else {
+                        // Пытаемся извлечь число из строки
+                        const numMatch = priorityText.match(/\d+/);
+                        if (numMatch) {
+                            priorityNum = parseInt(numMatch[0]);
+                        }
+                    }
+                }
+                // Сохраняем в data-атрибуте для использования при редактировании
+                priorityEl.setAttribute('data-priority', priorityNum);
+                console.log('Task priority saved:', priorityNum, 'from text:', priorityText);
+            }
 
             // Load users
             const usersList = document.getElementById('task-users');
@@ -847,7 +888,7 @@ async function loadChatMessages(type, id) {
                 console.error('Failed to read error response:', e);
             }
             console.error('Failed to load chat messages:', response.status, errorText);
-            
+
             let errorMessage = 'Ошибка при загрузке сообщений';
             try {
                 const errorData = JSON.parse(errorText);
@@ -860,7 +901,7 @@ async function loadChatMessages(type, id) {
                     errorMessage = errorText;
                 }
             }
-            
+
             messagesContainer.innerHTML = `<div class="empty-state"><p>${escapeHtml(errorMessage)}</p></div>`;
             return;
         }
@@ -892,7 +933,7 @@ async function loadChatMessages(type, id) {
         } else {
             // Очищаем контейнер
             messagesContainer.innerHTML = '';
-            
+
             // Создаем все сообщения асинхронно
             const messagePromises = messages.map(async (message, index) => {
                 try {
@@ -935,14 +976,14 @@ async function loadChatMessages(type, id) {
             stack: error.stack,
             name: error.name
         });
-        
+
         let errorMessage = 'Ошибка соединения с сервером';
         if (error.message && error.message.includes('Failed to fetch')) {
             errorMessage = 'Не удалось подключиться к серверу. Убедитесь, что сервер запущен на http://localhost:8080';
         } else if (error.message) {
             errorMessage = 'Ошибка: ' + error.message;
         }
-        
+
         messagesContainer.innerHTML = `<div class="empty-state"><p>${escapeHtml(errorMessage)}</p></div>`;
     }
 }
@@ -1078,10 +1119,10 @@ async function handleSendMessage(e) {
         // Успешная отправка
         const data = await response.json().catch(() => ({}));
         console.log('Message sent successfully:', data);
-        
+
         const chatInput = document.getElementById('chat-input');
         if (chatInput) chatInput.value = '';
-        
+
         // Перезагружаем сообщения сразу после отправки
         console.log('Reloading chat messages after send...');
         await loadChatMessages('tasks', currentTaskId);
@@ -1092,14 +1133,14 @@ async function handleSendMessage(e) {
             stack: error.stack,
             name: error.name
         });
-        
+
         let errorMessage = 'Ошибка соединения с сервером';
         if (error.message && error.message.includes('Failed to fetch')) {
             errorMessage = 'Не удалось подключиться к серверу. Убедитесь, что сервер запущен на http://localhost:8080';
         } else if (error.message) {
             errorMessage = 'Ошибка: ' + error.message;
         }
-        
+
         alert(errorMessage);
     }
 }
@@ -1316,10 +1357,27 @@ async function handleEditTask(e) {
     e.preventDefault();
     clearErrors();
 
-    const title = document.getElementById('edit-task-title-input').value.trim();
-    const description = document.getElementById('edit-task-description-input').value.trim();
-    const status = document.getElementById('edit-task-status-input').value;
-    const priority = parseInt(document.getElementById('edit-task-priority-input').value) || 0;
+    if (!currentTaskId) {
+        console.error('Current task ID is missing');
+        showError('edit-task-error', 'Задача не выбрана');
+        return;
+    }
+
+    const titleInput = document.getElementById('edit-task-title-input');
+    const descriptionInput = document.getElementById('edit-task-description-input');
+    const statusInput = document.getElementById('edit-task-status-input');
+    const priorityInput = document.getElementById('edit-task-priority-input');
+
+    if (!titleInput || !statusInput) {
+        console.error('Edit task form inputs not found');
+        showError('edit-task-error', 'Ошибка: форма не найдена');
+        return;
+    }
+
+    const title = titleInput.value.trim();
+    const description = descriptionInput ? descriptionInput.value.trim() : '';
+    const status = statusInput.value;
+    const priority = priorityInput ? (parseInt(priorityInput.value) || 0) : 0;
 
     if (!title) {
         showError('edit-task-error', 'Название задачи обязательно');
@@ -1327,18 +1385,53 @@ async function handleEditTask(e) {
     }
 
     try {
+        console.log('Updating task:', { id: currentTaskId, title, description, status, priority });
         const response = await tasksAPI.updateTask(currentTaskId, title, description, status, priority);
-        const data = await response.json();
+        console.log('Update task response status:', response.status, response.ok);
 
-        if (response.ok) {
-            closeEditTaskModal();
-            showTask(currentTaskId); // Перезагружаем задачу
-        } else {
-            showError('edit-task-error', data.error || 'Ошибка при обновлении задачи');
+        if (!response.ok) {
+            let errorMessage = 'Ошибка при обновлении задачи';
+            try {
+                const errorText = await response.text();
+                console.error('Failed to update task:', response.status, errorText);
+                let errorData = {};
+                try {
+                    errorData = JSON.parse(errorText);
+                } catch (e) {
+                    console.error('Failed to parse error response');
+                }
+                if (errorData.error) {
+                    errorMessage = errorData.error;
+                    // Улучшаем сообщение об ошибке для пользователя
+                    if (errorMessage.includes('status changes only in a certain order') ||
+                        errorMessage.includes('the task status changes only in a certain order')) {
+                        errorMessage = 'Недопустимый переход статуса. Правила: To Do → In Progress; In Progress → To Do или Done; Done → In Progress';
+                    }
+                } else if (errorText && errorText !== 'Unknown error') {
+                    errorMessage = errorText;
+                    if (errorMessage.includes('status changes only in a certain order')) {
+                        errorMessage = 'Недопустимый переход статуса. Правила: To Do → In Progress; In Progress → To Do или Done; Done → In Progress';
+                    }
+                }
+            } catch (e) {
+                console.error('Failed to read error response:', e);
+            }
+            showError('edit-task-error', errorMessage);
+            return;
         }
+
+        const data = await response.json().catch(() => ({}));
+        console.log('Task updated successfully:', data);
+        closeEditTaskModal();
+        showTask(currentTaskId); // Перезагружаем задачу
     } catch (error) {
         console.error('Error updating task:', error);
-        showError('edit-task-error', 'Ошибка соединения с сервером');
+        console.error('Error details:', {
+            message: error.message,
+            stack: error.stack,
+            name: error.name
+        });
+        showError('edit-task-error', 'Ошибка соединения с сервером: ' + error.message);
     }
 }
 
@@ -1378,18 +1471,118 @@ function closeCreateTaskModal() {
 }
 
 function openEditTaskModal() {
+    if (!currentTaskId) {
+        console.error('Cannot open edit modal: task ID is missing');
+        alert('Ошибка: задача не выбрана');
+        return;
+    }
+
     // Заполняем форму текущими данными задачи
-    const taskTitle = document.getElementById('task-title').textContent;
-    const taskDescription = document.getElementById('task-description').textContent;
-    const taskStatus = document.getElementById('task-status').textContent.toLowerCase();
-    const taskPriority = document.getElementById('task-priority').textContent;
+    const taskTitleEl = document.getElementById('task-title');
+    const taskDescriptionEl = document.getElementById('task-description');
+    const taskStatusEl = document.getElementById('task-status');
+    const taskPriorityEl = document.getElementById('task-priority');
 
-    document.getElementById('edit-task-title-input').value = taskTitle;
-    document.getElementById('edit-task-description-input').value = taskDescription;
-    document.getElementById('edit-task-status-input').value = taskStatus === 'in progress' ? 'in_progress' : taskStatus;
-    document.getElementById('edit-task-priority-input').value = taskPriority === 'N/A' ? 0 : taskPriority;
+    if (!taskTitleEl || !taskStatusEl) {
+        console.error('Task elements not found');
+        alert('Ошибка: не удалось загрузить данные задачи');
+        return;
+    }
 
-    document.getElementById('edit-task-modal').style.display = 'flex';
+    const taskTitle = taskTitleEl.textContent.trim();
+    const taskDescription = taskDescriptionEl ? taskDescriptionEl.textContent.trim() : '';
+    const taskStatus = taskStatusEl.textContent.trim().toLowerCase();
+    const taskPriorityText = taskPriorityEl ? taskPriorityEl.textContent.trim() : 'N/A';
+
+    // Преобразуем статус
+    let statusValue = taskStatus;
+    if (taskStatus === 'in progress' || taskStatus === 'in-progress') {
+        statusValue = 'in_progress';
+    }
+
+    // Преобразуем приоритет - сначала пытаемся взять из data-атрибута
+    let priorityValue = 0;
+    if (taskPriorityEl) {
+        const dataPriority = taskPriorityEl.getAttribute('data-priority');
+        if (dataPriority !== null && dataPriority !== '') {
+            priorityValue = parseInt(dataPriority) || 0;
+            console.log('Priority from data-attribute:', priorityValue);
+        } else if (taskPriorityText && taskPriorityText !== 'N/A') {
+            // Fallback: пытаемся извлечь число из текста
+            if (taskPriorityText.includes('Очень важно')) {
+                priorityValue = 2;
+            } else if (taskPriorityText.includes('Важно')) {
+                priorityValue = 1;
+            } else {
+                const priorityMatch = taskPriorityText.match(/\d+/);
+                if (priorityMatch) {
+                    priorityValue = parseInt(priorityMatch[0]);
+                }
+            }
+            console.log('Priority from text:', priorityValue, 'text:', taskPriorityText);
+        }
+    }
+
+    const titleInput = document.getElementById('edit-task-title-input');
+    const descriptionInput = document.getElementById('edit-task-description-input');
+    const statusInput = document.getElementById('edit-task-status-input');
+    const priorityInput = document.getElementById('edit-task-priority-input');
+
+    if (!titleInput || !statusInput) {
+        console.error('Edit task form inputs not found');
+        alert('Ошибка: форма редактирования не найдена');
+        return;
+    }
+
+    titleInput.value = taskTitle;
+    if (descriptionInput) descriptionInput.value = taskDescription;
+    if (priorityInput) priorityInput.value = priorityValue;
+
+    // Правила перехода статусов (соответствуют backend)
+    const allowedTransitions = {
+        'todo': ['in_progress'],
+        'in_progress': ['todo', 'done'],
+        'done': ['in_progress']
+    };
+
+    // Очищаем и заполняем select только допустимыми статусами
+    statusInput.innerHTML = '';
+
+    // Добавляем текущий статус как первый вариант
+    const currentStatusOption = document.createElement('option');
+    currentStatusOption.value = statusValue;
+    currentStatusOption.textContent = statusValue === 'todo' ? 'To Do' :
+        statusValue === 'in_progress' ? 'In Progress' : 'Done';
+    currentStatusOption.selected = true;
+    statusInput.appendChild(currentStatusOption);
+
+    // Добавляем допустимые переходы
+    const allowedStatuses = allowedTransitions[statusValue] || [];
+    allowedStatuses.forEach(allowedStatus => {
+        if (allowedStatus !== statusValue) {
+            const option = document.createElement('option');
+            option.value = allowedStatus;
+            option.textContent = allowedStatus === 'todo' ? 'To Do' :
+                allowedStatus === 'in_progress' ? 'In Progress' : 'Done';
+            statusInput.appendChild(option);
+        }
+    });
+
+    console.log('Edit task modal opened with data:', {
+        title: taskTitle,
+        description: taskDescription,
+        status: statusValue,
+        priority: priorityValue,
+        allowedTransitions: allowedStatuses
+    });
+
+    const editTaskModal = document.getElementById('edit-task-modal');
+    if (editTaskModal) {
+        editTaskModal.style.display = 'flex';
+        titleInput.focus();
+    } else {
+        console.error('Edit task modal not found');
+    }
 }
 
 function closeEditTaskModal() {
@@ -1440,64 +1633,131 @@ function backToProject() {
 
 async function loadReports(projectId) {
     const reportsContent = document.getElementById('reports-content');
-    if (!reportsContent) return;
+    if (!reportsContent) {
+        console.error('Reports content container not found');
+        return;
+    }
+
+    if (!projectId) {
+        console.error('Project ID is missing for reports');
+        reportsContent.innerHTML = '<div class="empty-state"><p>ID проекта не указан</p></div>';
+        return;
+    }
 
     reportsContent.innerHTML = '<div class="loading">Загрузка отчетов...</div>';
 
     try {
+        console.log('Loading reports for project ID:', projectId);
         const [topWorkersRes, avgTimeRes, completionRes] = await Promise.all([
             reportsAPI.getTopWorkers(projectId),
             reportsAPI.getAverageTime(projectId),
             reportsAPI.getCompletionPercent(projectId),
         ]);
 
+        console.log('Reports responses:', {
+            topWorkers: { status: topWorkersRes.status, ok: topWorkersRes.ok },
+            avgTime: { status: avgTimeRes.status, ok: avgTimeRes.ok },
+            completion: { status: completionRes.status, ok: completionRes.ok }
+        });
+
         let html = '<div class="reports-grid">';
 
         // Top Workers
         if (topWorkersRes.ok) {
-            const topWorkers = await topWorkersRes.json();
-            html += '<div class="report-card"><h4>Топ работников</h4>';
-            if (Array.isArray(topWorkers) && topWorkers.length > 0) {
-                html += '<ul>';
-                topWorkers.forEach(worker => {
-                    html += `<li>${escapeHtml(worker.full_name || worker.email || 'Unknown')}: ${worker.task_count || 0} задач</li>`;
-                });
-                html += '</ul>';
-            } else {
-                html += '<p>Нет данных</p>';
+            try {
+                const topWorkers = await topWorkersRes.json();
+                console.log('Top workers data:', topWorkers);
+                html += '<div class="report-card"><h4>Топ работников</h4>';
+                if (Array.isArray(topWorkers) && topWorkers.length > 0) {
+                    html += '<ul>';
+                    topWorkers.forEach(worker => {
+                        // Поддерживаем оба варианта имен полей
+                        const name = worker.name || worker.Name || worker.full_name || worker.FullName || 'Unknown';
+                        const tasks = worker.completed_tasks || worker.CompletedTasks || worker.task_count || worker.TaskCount || 0;
+                        html += `<li>${escapeHtml(name)}: ${tasks} задач</li>`;
+                    });
+                    html += '</ul>';
+                } else {
+                    html += '<p>Нет данных</p>';
+                }
+                html += '</div>';
+            } catch (e) {
+                console.error('Error parsing top workers:', e);
+                html += '<div class="report-card"><h4>Топ работников</h4><p>Ошибка загрузки</p></div>';
             }
-            html += '</div>';
+        } else {
+            console.error('Failed to load top workers:', topWorkersRes.status);
+            const errorText = await topWorkersRes.text().catch(() => '');
+            console.error('Error response:', errorText);
+            html += '<div class="report-card"><h4>Топ работников</h4><p>Ошибка загрузки</p></div>';
         }
 
         // Average Time
         if (avgTimeRes.ok) {
-            const avgTime = await avgTimeRes.json();
-            html += '<div class="report-card"><h4>Среднее время</h4>';
-            if (avgTime && avgTime.average_time) {
-                html += `<p>${avgTime.average_time} дней</p>`;
-            } else {
-                html += '<p>Нет данных</p>';
+            try {
+                const avgTime = await avgTimeRes.json();
+                console.log('Average time data:', avgTime);
+                html += '<div class="report-card"><h4>Среднее время выполнения</h4>';
+                // Поддерживаем оба варианта имен полей
+                const avgHuman = avgTime.average_human || avgTime.AverageHuman || avgTime.average_time || avgTime.AverageTime;
+                const tasksCount = avgTime.tasks_count || avgTime.TasksCount || avgTime.completed_count || avgTime.CompletedCount || 0;
+
+                if (avgHuman) {
+                    html += `<p>${escapeHtml(avgHuman)}</p>`;
+                    if (tasksCount > 0) {
+                        html += `<p class="report-detail">На основе ${tasksCount} задач</p>`;
+                    }
+                } else {
+                    html += '<p>Нет данных</p>';
+                }
+                html += '</div>';
+            } catch (e) {
+                console.error('Error parsing average time:', e);
+                html += '<div class="report-card"><h4>Среднее время выполнения</h4><p>Ошибка загрузки</p></div>';
             }
-            html += '</div>';
+        } else {
+            console.error('Failed to load average time:', avgTimeRes.status);
+            html += '<div class="report-card"><h4>Среднее время выполнения</h4><p>Ошибка загрузки</p></div>';
         }
 
         // Completion Percent
         if (completionRes.ok) {
-            const completion = await completionRes.json();
-            html += '<div class="report-card"><h4>Процент завершения</h4>';
-            if (completion && completion.completion_percent !== undefined) {
-                html += `<p>${completion.completion_percent}%</p>`;
-            } else {
-                html += '<p>Нет данных</p>';
+            try {
+                const completion = await completionRes.json();
+                console.log('Completion percent data:', completion);
+                html += '<div class="report-card"><h4>Процент завершения</h4>';
+                // Поддерживаем оба варианта имен полей
+                const percent = completion.percent !== undefined ? completion.percent : completion.Percent;
+                const totalTasks = completion.total_tasks || completion.TotalTasks || 0;
+                const doneTasks = completion.done_tasks || completion.DoneTasks || 0;
+
+                if (percent !== undefined) {
+                    html += `<p class="report-percent">${percent.toFixed(1)}%</p>`;
+                    html += `<p class="report-detail">${doneTasks} из ${totalTasks} задач</p>`;
+                } else {
+                    html += '<p>Нет данных</p>';
+                }
+                html += '</div>';
+            } catch (e) {
+                console.error('Error parsing completion percent:', e);
+                html += '<div class="report-card"><h4>Процент завершения</h4><p>Ошибка загрузки</p></div>';
             }
-            html += '</div>';
+        } else {
+            console.error('Failed to load completion percent:', completionRes.status);
+            html += '<div class="report-card"><h4>Процент завершения</h4><p>Ошибка загрузки</p></div>';
         }
 
         html += '</div>';
         reportsContent.innerHTML = html;
+        console.log('Reports loaded successfully');
     } catch (error) {
         console.error('Error loading reports:', error);
-        reportsContent.innerHTML = '<div class="empty-state"><p>Ошибка при загрузке отчетов</p></div>';
+        console.error('Error details:', {
+            message: error.message,
+            stack: error.stack,
+            name: error.name
+        });
+        reportsContent.innerHTML = '<div class="empty-state"><p>Ошибка при загрузке отчетов: ' + escapeHtml(error.message) + '</p></div>';
     }
 }
 
@@ -1600,17 +1860,38 @@ document.addEventListener('DOMContentLoaded', () => {
     // Edit task handlers
     const editTaskBtn = document.getElementById('edit-task-btn');
     const deleteTaskBtn = document.getElementById('delete-task-btn');
+    const editTaskForm = document.getElementById('edit-task-form');
+    const closeEditTaskModalBtn = document.getElementById('close-edit-task-modal');
+    const cancelEditTaskBtn = document.getElementById('cancel-edit-task');
+    const editTaskModal = document.getElementById('edit-task-modal');
+
     if (editTaskBtn) {
         editTaskBtn.addEventListener('click', openEditTaskModal);
-        document.getElementById('edit-task-form').addEventListener('submit', handleEditTask);
-        document.getElementById('close-edit-task-modal').addEventListener('click', closeEditTaskModal);
-        document.getElementById('cancel-edit-task').addEventListener('click', closeEditTaskModal);
-        document.getElementById('edit-task-modal').addEventListener('click', (e) => {
+    }
+
+    if (editTaskForm) {
+        editTaskForm.addEventListener('submit', handleEditTask);
+        console.log('Edit task form submit handler attached');
+    } else {
+        console.error('Edit task form not found!');
+    }
+
+    if (closeEditTaskModalBtn) {
+        closeEditTaskModalBtn.addEventListener('click', closeEditTaskModal);
+    }
+
+    if (cancelEditTaskBtn) {
+        cancelEditTaskBtn.addEventListener('click', closeEditTaskModal);
+    }
+
+    if (editTaskModal) {
+        editTaskModal.addEventListener('click', (e) => {
             if (e.target.id === 'edit-task-modal') {
                 closeEditTaskModal();
             }
         });
     }
+
     if (deleteTaskBtn) {
         deleteTaskBtn.addEventListener('click', handleDeleteTask);
     }
