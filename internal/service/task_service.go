@@ -85,6 +85,9 @@ func (s *taskService) CreateTask(req *models.TaskCreateReq) error {
 }
 
 func (s *taskService) UpdateTask(id uint, req models.TaskUpdateReq) error {
+	s.logger.Info("UpdateTask called", "op", "service.task.UpdateTask", "id", id,
+		"title", req.Title, "status", req.Status, "priority", req.Priority)
+
 	return s.db.Transaction(func(tx *gorm.DB) error {
 		taskrepo := s.repo.WithDB(tx)
 		projectRepo := s.projectRepo.WithDB(tx)
@@ -92,9 +95,11 @@ func (s *taskService) UpdateTask(id uint, req models.TaskUpdateReq) error {
 		task, err := taskrepo.GetTaskByID(id)
 		if err != nil {
 			s.logger.Error("failed to get the task by id",
-				"op", "service.project.Update", "id", id, "err", err)
+				"op", "service.task.UpdateTask", "id", id, "err", err)
 			return err
 		}
+
+		s.logger.Info("task found", "op", "service.task.UpdateTask", "task_id", task.ID, "current_status", task.Status)
 
 		//этого блого нет после ревью
 		allowedTransport := map[string][]string{
@@ -124,8 +129,17 @@ func (s *taskService) UpdateTask(id uint, req models.TaskUpdateReq) error {
 			return errors.New("the number of users exceeds the allowed limit")
 		}
 
+		// Очищаем название от восклицательных знаков перед сохранением
+		// Восклицательные знаки добавляются только при отображении в buildTaskResponse
+		var cleanTitle *string
+		if req.Title != nil {
+			// Убираем все восклицательные знаки из конца названия
+			cleaned := strings.TrimRight(*req.Title, "!")
+			cleanTitle = &cleaned
+		}
+
 		updateReq := models.TaskUpdateReq{
-			Title:       req.Title,
+			Title:       cleanTitle,
 			Description: req.Description,
 			Status:      req.Status,
 			Users:       req.Users,
@@ -134,6 +148,7 @@ func (s *taskService) UpdateTask(id uint, req models.TaskUpdateReq) error {
 			FinishTask:  req.FinishTask,
 		}
 
+		// Управление временными метками в зависимости от изменения статуса
 		if req.Status != nil {
 			if newStatusTask == "in_progress" && !strings.EqualFold(oldStatusTask, "in_progress") {
 				now := time.Now()
@@ -159,23 +174,85 @@ func (s *taskService) UpdateTask(id uint, req models.TaskUpdateReq) error {
 			return err
 		}
 
-		countWithStatus, err := taskrepo.CountTasksByStatusByProjectID(task.ProjectID, task.ID, "done")
-		if err != nil {
-			s.logger.Error("failed to count open tasks", "op", "service.task.UpdateTask", "project_id", task.ProjectID, "err", err)
-			return err
+		// Обновляем связь с пользователями, если они переданы
+		if req.Users != nil {
+			var taskModel models.Task
+			if err := tx.First(&taskModel, task.ID).Error; err != nil {
+				s.logger.Error("failed to get task for user update", "err", err)
+				return err
+			}
+			if err := tx.Model(&taskModel).Association("Users").Replace(req.Users); err != nil {
+				s.logger.Error("failed to update task users", "err", err)
+				return err
+			}
+			s.logger.Info("task users updated", "task_id", task.ID, "users_count", len(*req.Users))
 		}
 
-		statusDone := "done"
-		statusInProgress := "in_progress"
-		newProjStatus := models.ProjectUpdReq{}
-		if countWithStatus == 0 {
-			newProjStatus.Status = &statusInProgress
-		} else {
-			newProjStatus.Status = &statusDone
-		}
+		// Обновляем статус проекта на основе количества завершенных задач
+		// Важно: подсчет происходит ПОСЛЕ обновления задачи, чтобы учесть новый статус
+		if req.Status != nil {
+			var doneTasksCount int64
+			var totalTasksCount int64
 
-		if err := projectRepo.UpdateProject(task.ProjectID, newProjStatus); err != nil {
-			s.logger.Info("project closed (all tasks done)", "project_id", task.ProjectID)
+			// Подсчитываем количество завершенных задач ПОСЛЕ обновления
+			// Теперь текущая задача уже имеет новый статус в БД
+			if err := tx.Model(&models.Task{}).
+				Where("project_id = ? AND status = ?", task.ProjectID, "done").
+				Count(&doneTasksCount).Error; err == nil {
+
+				// Подсчитываем общее количество задач в проекте
+				if err := tx.Model(&models.Task{}).
+					Where("project_id = ?", task.ProjectID).
+					Count(&totalTasksCount).Error; err == nil {
+
+					statusDone := "done"
+					statusInProgress := "in_progress"
+					newProjStatus := models.ProjectUpdReq{}
+
+					s.logger.Info("checking project status", "project_id", task.ProjectID,
+						"done_tasks", doneTasksCount, "total_tasks", totalTasksCount,
+						"new_task_status", newStatusTask)
+
+					// Если все задачи завершены, проект помечаем как done
+					if totalTasksCount > 0 && doneTasksCount == totalTasksCount {
+						newProjStatus.Status = &statusDone
+						s.logger.Info("all tasks done, setting project to done", "project_id", task.ProjectID)
+					} else if doneTasksCount == 0 {
+						// Если нет завершенных задач, проект в процессе
+						newProjStatus.Status = &statusInProgress
+						s.logger.Info("no tasks done, setting project to in_progress", "project_id", task.ProjectID)
+					} else if doneTasksCount > 0 && doneTasksCount < totalTasksCount {
+						// Если есть завершенные задачи, но не все - проект в процессе
+						newProjStatus.Status = &statusInProgress
+						s.logger.Info("some tasks done, setting project to in_progress", "project_id", task.ProjectID,
+							"done", doneTasksCount, "total", totalTasksCount)
+					}
+
+					if newProjStatus.Status != nil {
+						// Обновляем проект напрямую через репозиторий в транзакции
+						// Валидация статуса проекта пропускается, т.к. статус определяется автоматически
+						// на основе состояния задач
+						if err := projectRepo.UpdateProject(task.ProjectID, newProjStatus); err != nil {
+							s.logger.Error("failed to update project status", "project_id", task.ProjectID,
+								"new_status", *newProjStatus.Status, "err", err)
+							// Возвращаем ошибку, т.к. обновление статуса проекта важно
+							return err
+						} else {
+							s.logger.Info("project status updated successfully", "project_id", task.ProjectID,
+								"status", *newProjStatus.Status, "done_tasks", doneTasksCount, "total_tasks", totalTasksCount)
+						}
+					} else {
+						s.logger.Info("project status unchanged", "project_id", task.ProjectID,
+							"done_tasks", doneTasksCount, "total_tasks", totalTasksCount)
+					}
+				} else {
+					s.logger.Error("failed to count total tasks", "project_id", task.ProjectID, "err", err)
+					return err
+				}
+			} else {
+				s.logger.Error("failed to count done tasks", "project_id", task.ProjectID, "err", err)
+				return err
+			}
 		}
 
 		s.logger.Info("update task from req successful", "op", "service.project.UpdateTask")

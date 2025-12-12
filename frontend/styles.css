@@ -506,6 +506,19 @@ body {
     margin: 0;
 }
 
+.report-card .report-percent {
+    font-size: 24px;
+    font-weight: 600;
+    color: #0052cc;
+    margin-bottom: 8px;
+}
+
+.report-card .report-detail {
+    font-size: 12px;
+    color: #6b778c;
+    margin-top: 4px;
+}
+
 /* Status Badges */
 .status-badge {
     display: inline-block;

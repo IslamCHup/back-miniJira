@@ -117,12 +117,32 @@ func (r *projectRepository) ListProjects(filter *models.ProjectFilter) ([]models
 }
 
 func (r *projectRepository) UpdateProject(id uint, req models.ProjectUpdReq) error {
-	res := r.db.Model(&models.Project{}).Where("id = ?", id).Updates(req)
-	if res.Error != nil {
-		r.logger.Error("UpdateProject failed", "id", id, "err", res.Error)
-		return res.Error
+	// Создаем map для обновления, включая только не-nil поля
+	updates := make(map[string]interface{})
+
+	if req.Title != nil {
+		updates["title"] = *req.Title
 	}
-	r.logger.Info("UpdateProject success", "id", id, "rows", res.RowsAffected)
+	if req.Description != nil {
+		updates["description"] = *req.Description
+	}
+	if req.Status != nil {
+		updates["status"] = *req.Status
+	}
+	// Tasks не обновляются через Updates, т.к. это связь many-to-many
+
+	// Если есть поля для обновления
+	if len(updates) > 0 {
+		res := r.db.Model(&models.Project{}).Where("id = ?", id).Updates(updates)
+		if res.Error != nil {
+			r.logger.Error("UpdateProject failed", "id", id, "err", res.Error, "updates", updates)
+			return res.Error
+		}
+		r.logger.Info("UpdateProject success", "id", id, "rows", res.RowsAffected, "updates", updates)
+	} else {
+		r.logger.Info("UpdateProject: no fields to update", "id", id)
+	}
+
 	return nil
 }
 

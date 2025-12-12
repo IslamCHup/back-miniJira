@@ -49,12 +49,46 @@ func (r *taskRepository) CreateTask(req *models.TaskCreateReq) error {
 }
 
 func (r *taskRepository) UpdateTask(id uint, req models.TaskUpdateReq) error {
-	res := r.db.Model(&models.Task{}).Where("id = ?", id).Omit("Users").Updates(req)
-	if res.Error != nil {
-		r.logger.Error("UpdateTask failed", "id", id, "err", res.Error)
-		return res.Error
+	// Создаем map для обновления, включая только не-nil поля
+	updates := make(map[string]interface{})
+
+	if req.Title != nil {
+		updates["title"] = *req.Title
 	}
-	r.logger.Info("UpdateTask success", "id", id, "rows", res.RowsAffected)
+	if req.Description != nil {
+		updates["description"] = *req.Description
+	}
+	if req.Status != nil {
+		updates["status"] = *req.Status
+	}
+	if req.Priority != nil {
+		updates["priority"] = *req.Priority
+	}
+	if req.LimitUser != nil {
+		updates["limit_user"] = *req.LimitUser
+	}
+
+	// Для времени: если указатель не nil, добавляем значение в обновления
+	// GORM обработает указатель на время корректно
+	if req.StartTask != nil {
+		updates["start_task"] = *req.StartTask
+	}
+	if req.FinishTask != nil {
+		updates["finish_task"] = *req.FinishTask
+	}
+
+	// Если есть поля для обновления
+	if len(updates) > 0 {
+		res := r.db.Model(&models.Task{}).Where("id = ?", id).Updates(updates)
+		if res.Error != nil {
+			r.logger.Error("UpdateTask failed", "id", id, "err", res.Error, "updates", updates)
+			return res.Error
+		}
+		r.logger.Info("UpdateTask success", "id", id, "rows", res.RowsAffected, "updates", updates)
+	} else {
+		r.logger.Info("UpdateTask: no fields to update", "id", id)
+	}
+
 	return nil
 }
 
