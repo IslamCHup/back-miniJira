@@ -83,7 +83,12 @@
     <div id="app-screen" class="screen" style="display: none;">
         <header class="app-header">
             <h1>Mini-Jira</h1>
-            <button id="logout-btn" class="btn btn-secondary">Выйти</button>
+            <div style="display: flex; gap: 10px; align-items: center;">
+                <button id="manage-teams-btn" class="btn btn-secondary" style="display: none;">Управление
+                    командами</button>
+                <button id="view-mode-toggle" class="btn btn-secondary">Kanban</button>
+                <button id="logout-btn" class="btn btn-secondary">Выйти</button>
+            </div>
         </header>
 
         <main class="app-main">
@@ -99,8 +104,56 @@
                 </div>
             </div>
 
+            <!-- Kanban Board View -->
+            <div id="kanban-view" class="view" style="display: none;">
+                <div class="kanban-container">
+                    <!-- Column 1: Projects List -->
+                    <div class="kanban-column projects-column">
+                        <div class="kanban-column-header">
+                            <h3>Проекты</h3>
+                        </div>
+                        <div id="kanban-projects-list" class="kanban-projects-list">
+                            <!-- Projects will be loaded here -->
+                        </div>
+                    </div>
+
+                    <!-- Column 2: To Do -->
+                    <div class="kanban-column">
+                        <div class="kanban-column-header">
+                            <h3>To Do</h3>
+                            <span id="todo-count" class="task-count">0</span>
+                        </div>
+                        <div id="kanban-todo-tasks" class="kanban-tasks-list" data-status="todo">
+                            <!-- Tasks with status 'todo' will be loaded here -->
+                        </div>
+                    </div>
+
+                    <!-- Column 3: In Progress -->
+                    <div class="kanban-column">
+                        <div class="kanban-column-header">
+                            <h3>In Progress</h3>
+                            <span id="in-progress-count" class="task-count">0</span>
+                        </div>
+                        <div id="kanban-in-progress-tasks" class="kanban-tasks-list" data-status="in_progress">
+                            <!-- Tasks with status 'in_progress' will be loaded here -->
+                        </div>
+                    </div>
+
+                    <!-- Column 4: Done -->
+                    <div class="kanban-column">
+                        <div class="kanban-column-header">
+                            <h3>Done</h3>
+                            <span id="done-count" class="task-count">0</span>
+                        </div>
+                        <div id="kanban-done-tasks" class="kanban-tasks-list" data-status="done">
+                            <!-- Tasks with status 'done' will be loaded here -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             <!-- Create Project Modal -->
-            <div id="create-project-modal" class="modal" style="display: none;">
+            <div id="create-project-modal" class="modal">
                 <div class="modal-content">
                     <div class="modal-header">
                         <h2>Создать проект</h2>
@@ -123,6 +176,13 @@
                                 <option value="completed">Завершен</option>
                             </select>
                         </div>
+                        <div class="form-group">
+                            <label>Команды проекта</label>
+                            <div id="create-project-teams-checkboxes"
+                                style="max-height: 200px; overflow-y: auto; border: 1px solid #dfe1e6; padding: 10px; border-radius: 4px;">
+                                <p style="color: #5e6c84; font-size: 14px;">Загрузка команд...</p>
+                            </div>
+                        </div>
                         <div class="form-actions">
                             <button type="button" class="btn btn-secondary" id="cancel-create-project">Отмена</button>
                             <button type="submit" class="btn btn-primary">Создать</button>
@@ -140,7 +200,9 @@
                         <h2 id="project-title"></h2>
                     </div>
                     <div id="project-actions" style="display: none;">
-                        <button id="edit-project-btn" class="btn btn-secondary">Редактировать</button>
+                        <button id="manage-project-teams-btn" class="btn btn-secondary">Управление командами</button>
+                        <button id="edit-project-btn" class="btn btn-secondary"
+                            style="margin-left: 10px;">Редактировать</button>
                         <button id="delete-project-btn" class="btn btn-secondary"
                             style="background-color: #de350b; margin-left: 10px;">Удалить</button>
                     </div>
@@ -163,11 +225,15 @@
                             задачу</button>
                     </div>
                     <!-- Фильтры задач -->
-                    <div id="task-filters" class="task-filters" style="margin-bottom: 20px; padding: 15px; background: #f4f5f7; border-radius: 4px;">
-                        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; margin-bottom: 10px;">
+                    <div id="task-filters" class="task-filters"
+                        style="margin-bottom: 20px; padding: 15px; background: #f4f5f7; border-radius: 4px;">
+                        <div
+                            style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; margin-bottom: 10px;">
                             <div>
-                                <label for="filter-status" style="display: block; margin-bottom: 5px; font-size: 12px; color: #5e6c84;">Статус</label>
-                                <select id="filter-status" style="width: 100%; padding: 6px; border: 1px solid #dfe1e6; border-radius: 3px;">
+                                <label for="filter-status"
+                                    style="display: block; margin-bottom: 5px; font-size: 12px; color: #5e6c84;">Статус</label>
+                                <select id="filter-status"
+                                    style="width: 100%; padding: 6px; border: 1px solid #dfe1e6; border-radius: 3px;">
                                     <option value="">Все</option>
                                     <option value="todo">To Do</option>
                                     <option value="in_progress">In Progress</option>
@@ -175,8 +241,10 @@
                                 </select>
                             </div>
                             <div>
-                                <label for="filter-priority" style="display: block; margin-bottom: 5px; font-size: 12px; color: #5e6c84;">Приоритет</label>
-                                <select id="filter-priority" style="width: 100%; padding: 6px; border: 1px solid #dfe1e6; border-radius: 3px;">
+                                <label for="filter-priority"
+                                    style="display: block; margin-bottom: 5px; font-size: 12px; color: #5e6c84;">Приоритет</label>
+                                <select id="filter-priority"
+                                    style="width: 100%; padding: 6px; border: 1px solid #dfe1e6; border-radius: 3px;">
                                     <option value="">Все</option>
                                     <option value="0">Обычная</option>
                                     <option value="1">Важно</option>
@@ -184,8 +252,10 @@
                                 </select>
                             </div>
                             <div>
-                                <label for="filter-sort-by" style="display: block; margin-bottom: 5px; font-size: 12px; color: #5e6c84;">Сортировка</label>
-                                <select id="filter-sort-by" style="width: 100%; padding: 6px; border: 1px solid #dfe1e6; border-radius: 3px;">
+                                <label for="filter-sort-by"
+                                    style="display: block; margin-bottom: 5px; font-size: 12px; color: #5e6c84;">Сортировка</label>
+                                <select id="filter-sort-by"
+                                    style="width: 100%; padding: 6px; border: 1px solid #dfe1e6; border-radius: 3px;">
                                     <option value="">По умолчанию</option>
                                     <option value="created_at">По дате создания</option>
                                     <option value="title">По названию</option>
@@ -194,17 +264,20 @@
                                 </select>
                             </div>
                             <div>
-                                <label for="filter-sort-order" style="display: block; margin-bottom: 5px; font-size: 12px; color: #5e6c84;">Порядок</label>
-                                <select id="filter-sort-order" style="width: 100%; padding: 6px; border: 1px solid #dfe1e6; border-radius: 3px;">
+                                <label for="filter-sort-order"
+                                    style="display: block; margin-bottom: 5px; font-size: 12px; color: #5e6c84;">Порядок</label>
+                                <select id="filter-sort-order"
+                                    style="width: 100%; padding: 6px; border: 1px solid #dfe1e6; border-radius: 3px;">
                                     <option value="asc">По возрастанию</option>
                                     <option value="desc">По убыванию</option>
                                 </select>
                             </div>
                         </div>
                         <div style="display: flex; gap: 10px;">
-                            <input type="text" id="filter-search" placeholder="Поиск по названию или описанию..." 
+                            <input type="text" id="filter-search" placeholder="Поиск по названию или описанию..."
                                 style="flex: 1; padding: 6px; border: 1px solid #dfe1e6; border-radius: 3px;">
-                            <button id="clear-filters" class="btn btn-secondary" style="padding: 6px 12px;">Очистить</button>
+                            <button id="clear-filters" class="btn btn-secondary"
+                                style="padding: 6px 12px;">Очистить</button>
                         </div>
                     </div>
                     <div id="project-tasks-list" class="tasks-list">
@@ -307,7 +380,7 @@
     </div>
 
     <!-- Create Task Modal -->
-    <div id="create-task-modal" class="modal" style="display: none;">
+    <div id="create-task-modal" class="modal">
         <div class="modal-content">
             <div class="modal-header">
                 <h2>Создать задачу</h2>
@@ -376,6 +449,67 @@
                     <button type="submit" class="btn btn-primary">Сохранить</button>
                 </div>
                 <div id="edit-task-error" class="error-message"></div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Manage Teams Modal -->
+    <div id="manage-teams-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Управление командами</h2>
+                <button class="modal-close" id="close-manage-teams-modal">&times;</button>
+            </div>
+            <div style="margin-bottom: 20px;">
+                <button id="create-team-btn" class="btn btn-primary">+ Создать команду</button>
+            </div>
+            <div id="teams-list">
+                <!-- Teams will be loaded here -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Create/Edit Team Modal -->
+    <div id="team-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="team-modal-title">Создать команду</h2>
+                <button class="modal-close" id="close-team-modal">&times;</button>
+            </div>
+            <form id="team-form">
+                <div class="form-group">
+                    <label for="team-name-input">Название команды</label>
+                    <select id="team-name-input" required>
+                        <option value="">Выберите название</option>
+                        <option value="testers">testers</option>
+                        <option value="backend">backend</option>
+                        <option value="frontend">frontend</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="team-lead-input">Лидер команды</label>
+                    <select id="team-lead-input" required>
+                        <option value="">Выберите лидера</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="team-project-input">Проект (опционально)</label>
+                    <select id="team-project-input">
+                        <option value="">Без проекта</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Участники команды</label>
+                    <div id="team-users-checkboxes"
+                        style="max-height: 200px; overflow-y: auto; border: 1px solid #dfe1e6; padding: 10px; border-radius: 4px;">
+                        <!-- User checkboxes will be loaded here -->
+                    </div>
+                </div>
+                <div class="form-actions">
+                    <button type="button" class="btn btn-secondary" id="cancel-team-form">Отмена</button>
+                    <button type="submit" class="btn btn-primary">Сохранить</button>
+                </div>
+                <div id="team-error" class="error-message"></div>
             </form>
         </div>
     </div>

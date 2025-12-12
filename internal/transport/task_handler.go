@@ -27,6 +27,8 @@ func (h *TaskHandler) RegisterRoutes(r *gin.Engine, authService service.AuthServ
 	{
 		authTasks.GET("/", h.ListTasks)
 		authTasks.GET("/:id", h.GetTaskByID)
+		authTasks.POST("/:id/assign", h.AssignTask)
+		authTasks.POST("/:id/unassign", h.UnassignTask)
 	}
 	adminTasks := r.Group("/admin/tasks")
 	adminTasks.Use(middleware.AuthMiddleware(authService), middleware.RequireAdmin())
@@ -168,4 +170,32 @@ func (h *TaskHandler) Update(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"message": "update successful"})
+}
+
+func (h *TaskHandler) AssignTask(c *gin.Context) {
+	taskID, _ := strconv.Atoi(c.Param("id"))
+	currentUser := c.MustGet("currentUser").(models.User)
+
+	if err := h.service.AssignTaskToUser(uint(taskID), currentUser.ID); err != nil {
+		h.logger.Error("AssignTask failed", "task_id", taskID, "user_id", currentUser.ID, "err", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	h.logger.Info("AssignTask success", "task_id", taskID, "user_id", currentUser.ID)
+	c.JSON(http.StatusOK, gin.H{"message": "task assigned successfully"})
+}
+
+func (h *TaskHandler) UnassignTask(c *gin.Context) {
+	taskID, _ := strconv.Atoi(c.Param("id"))
+	currentUser := c.MustGet("currentUser").(models.User)
+
+	if err := h.service.UnassignTaskFromUser(uint(taskID), currentUser.ID); err != nil {
+		h.logger.Error("UnassignTask failed", "task_id", taskID, "user_id", currentUser.ID, "err", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	h.logger.Info("UnassignTask success", "task_id", taskID, "user_id", currentUser.ID)
+	c.JSON(http.StatusOK, gin.H{"message": "task unassigned successfully"})
 }

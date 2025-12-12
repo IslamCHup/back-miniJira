@@ -37,6 +37,7 @@ func (h *UserHandler) RegisterRoutes(r *gin.Engine, authService service.AuthServ
 	adminUsers := r.Group("/admin/users")
 	adminUsers.Use(middleware.AuthMiddleware(authService), middleware.RequireAdmin())
 	{
+		adminUsers.GET("/", h.ListUsers)
 		adminUsers.DELETE("/:id", h.DeleteUser)
 	}
 
@@ -134,4 +135,16 @@ func (h *UserHandler) DeleteUser(c *gin.Context) {
 
 	h.logger.Info("DeleteUser success", "id", userID)
 	c.JSON(http.StatusOK, gin.H{"message": "user deleted"})
+}
+
+func (h *UserHandler) ListUsers(c *gin.Context) {
+	users, err := h.service.ListUsers()
+	if err != nil {
+		h.logger.Error("ListUsers failed", "error", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	h.logger.Info("ListUsers success", "count", len(users))
+	c.JSON(http.StatusOK, users)
 }

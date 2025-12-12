@@ -13,6 +13,8 @@ type TeamRepository interface {
 	DeleteTeam(id uint) error
 	GetTeamByID(teamID uint) (models.Team, []uint, error)
 	AssignUsers(team *models.Team, userIDs []uint) error
+	ListTeams() ([]models.Team, error)
+	GetTeamsByProjectID(projectID uint) ([]models.Team, error)
 }
 
 type teamRepository struct {
@@ -90,4 +92,24 @@ func (r *teamRepository) AssignUsers(team *models.Team, userIDs []uint) error {
 
 	r.logger.Info("AssignUsers success", "team_id", team.ID)
 	return nil
+}
+
+func (r *teamRepository) ListTeams() ([]models.Team, error) {
+	var teams []models.Team
+	if err := r.db.Find(&teams).Error; err != nil {
+		r.logger.Error("ListTeams failed", "err", err)
+		return nil, err
+	}
+	r.logger.Info("ListTeams success", "count", len(teams))
+	return teams, nil
+}
+
+func (r *teamRepository) GetTeamsByProjectID(projectID uint) ([]models.Team, error) {
+	var teams []models.Team
+	if err := r.db.Where("project_id = ?", projectID).Find(&teams).Error; err != nil {
+		r.logger.Error("GetTeamsByProjectID failed", "project_id", projectID, "err", err)
+		return nil, err
+	}
+	r.logger.Info("GetTeamsByProjectID success", "project_id", projectID, "count", len(teams))
+	return teams, nil
 }

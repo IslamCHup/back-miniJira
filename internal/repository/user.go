@@ -18,8 +18,8 @@ type UserRepository interface {
 	GetUserVerifyToken(token string) (models.User, error)
 	UpdateUserVerification(id uint, isVerified bool, token string) error
 	CountUsers() (int64, error)
+	ListUsers() ([]models.User, error)
 }
-
 
 type userRepository struct {
 	db     *gorm.DB
@@ -129,9 +129,19 @@ func (r *userRepository) UpdateUserVerification(id uint, isVerified bool, token 
 }
 
 func (r *userRepository) CountUsers() (int64, error) {
-    var count int64
-    if err := r.db.Model(&models.User{}).Count(&count).Error; err != nil {
-        return 0, err
-    }
-    return count, nil
+	var count int64
+	if err := r.db.Model(&models.User{}).Count(&count).Error; err != nil {
+		return 0, err
+	}
+	return count, nil
+}
+
+func (r *userRepository) ListUsers() ([]models.User, error) {
+	var users []models.User
+	if err := r.db.Find(&users).Error; err != nil {
+		r.logger.Error("ListUsers failed", "err", err)
+		return nil, err
+	}
+	r.logger.Info("ListUsers success", "count", len(users))
+	return users, nil
 }

@@ -10,6 +10,8 @@ let isAdmin = false;
 const userCache = {}; // Кэш для пользователей
 let currentTaskData = null; // Храним исходные данные текущей задачи
 let originalTaskStatus = null; // Храним исходный статус задачи для сравнения
+let viewMode = 'list'; // 'list' or 'kanban'
+let kanbanSelectedProjectId = null; // Выбранный проект в kanban режиме
 
 // ==================== API Functions ====================
 
@@ -195,6 +197,30 @@ const tasksAPI = {
         return response;
     },
 
+    async assignTask(id) {
+        const token = localStorage.getItem('token');
+        const response = await fetch(`${API_BASE_URL}/tasks/${id}/assign`, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json',
+            },
+        });
+        return response;
+    },
+
+    async unassignTask(id) {
+        const token = localStorage.getItem('token');
+        const response = await fetch(`${API_BASE_URL}/tasks/${id}/unassign`, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json',
+            },
+        });
+        return response;
+    },
+
     async updateTask(id, title, description, status, priority) {
         const token = localStorage.getItem('token');
         const body = {};
@@ -272,6 +298,18 @@ const chatAPI = {
 
 // Users API
 const usersAPI = {
+    async listUsers() {
+        const token = localStorage.getItem('token');
+        const response = await fetch(`${API_BASE_URL}/admin/users/`, {
+            method: 'GET',
+            headers: {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json',
+            },
+        });
+        return response;
+    },
+
     async getUserById(id) {
         const token = localStorage.getItem('token');
         const response = await fetch(`${API_BASE_URL}/users/${id}`, {
@@ -354,6 +392,94 @@ const reportsAPI = {
     async getUserTracker(projectId, userId) {
         const token = localStorage.getItem('token');
         const response = await fetch(`${API_BASE_URL}/projects/${projectId}/reports/user-tracker/${userId}`, {
+            method: 'GET',
+            headers: {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json',
+            },
+        });
+        return response;
+    },
+};
+
+// Teams API
+const teamsAPI = {
+    async listTeams() {
+        const token = localStorage.getItem('token');
+        const response = await fetch(`${API_BASE_URL}/admin/teams/`, {
+            method: 'GET',
+            headers: {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json',
+            },
+        });
+        return response;
+    },
+
+    async getTeamById(id) {
+        const token = localStorage.getItem('token');
+        const response = await fetch(`${API_BASE_URL}/teams/${id}`, {
+            method: 'GET',
+            headers: {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json',
+            },
+        });
+        return response;
+    },
+
+    async createTeam(name, userId, projectId, userIds) {
+        const token = localStorage.getItem('token');
+        const response = await fetch(`${API_BASE_URL}/admin/teams/`, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                name: name,
+                user_id: userId,
+                project_id: projectId || null,
+                user_ids: userIds || [],
+            }),
+        });
+        return response;
+    },
+
+    async updateTeam(id, name, userId, projectId, userIds) {
+        const token = localStorage.getItem('token');
+        const body = {};
+        if (name !== null) body.name = name;
+        if (userId !== null) body.user_id = userId;
+        if (projectId !== null) body.project_id = projectId;
+        if (userIds !== null) body.user_ids = userIds;
+
+        const response = await fetch(`${API_BASE_URL}/teams/${id}`, {
+            method: 'PATCH',
+            headers: {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(body),
+        });
+        return response;
+    },
+
+    async deleteTeam(id) {
+        const token = localStorage.getItem('token');
+        const response = await fetch(`${API_BASE_URL}/admin/teams/${id}`, {
+            method: 'DELETE',
+            headers: {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json',
+            },
+        });
+        return response;
+    },
+
+    async getTeamsByProject(projectId) {
+        const token = localStorage.getItem('token');
+        const response = await fetch(`${API_BASE_URL}/projects/${projectId}/teams`, {
             method: 'GET',
             headers: {
                 'Authorization': `Bearer ${token}`,
@@ -505,6 +631,16 @@ function showAuth() {
 function showApp() {
     document.getElementById('auth-screen').style.display = 'none';
     document.getElementById('app-screen').style.display = 'block';
+
+    // Initialize view mode
+    const toggleBtn = document.getElementById('view-mode-toggle');
+    if (viewMode === 'kanban') {
+        toggleBtn.textContent = 'Список';
+        showKanbanView();
+    } else {
+        toggleBtn.textContent = 'Kanban';
+        showListView();
+    }
 }
 
 // ==================== Projects Functions ====================
@@ -755,6 +891,11 @@ function createTaskCard(task) {
     const taskStatus = task.status || task.Status || 'N/A';
     const taskPriority = task.priority || task.Priority || '';
 
+    const currentUserId = getCurrentUserId();
+    const taskUsers = task.users || task.Users || [];
+    const isUserAssigned = taskUsers.some(u => (u.id || u.ID) === currentUserId);
+    const canAssign = !isAdmin && taskStatus.toLowerCase() === 'todo' && !isUserAssigned;
+
     card.innerHTML = `
         <h4>${escapeHtml(taskTitle)}</h4>
         <p>${escapeHtml(taskDesc)}</p>
@@ -762,14 +903,34 @@ function createTaskCard(task) {
             <span class="status-badge ${getStatusClass(taskStatus)}">${escapeHtml(taskStatus)}</span>
             ${taskPriority ? `<span>Приоритет: ${escapeHtml(taskPriority)}</span>` : ''}
         </div>
+        ${canAssign ? `<button class="btn btn-primary assign-task-in-list-btn" data-task-id="${taskId}" style="margin-top: 10px; width: 100%;">Принять задачу</button>` : ''}
     `;
-    card.addEventListener('click', () => {
+
+    card.addEventListener('click', (e) => {
+        // Don't trigger task view if clicking on assign button
+        if (e.target.classList.contains('assign-task-in-list-btn')) {
+            e.stopPropagation();
+            return;
+        }
+
         if (taskId) {
             showTask(taskId);
         } else {
             console.error('Task ID is missing!', task);
         }
     });
+
+    // Add event listener for assign button
+    if (canAssign) {
+        const assignBtn = card.querySelector('.assign-task-in-list-btn');
+        if (assignBtn) {
+            assignBtn.addEventListener('click', async (e) => {
+                e.stopPropagation();
+                await handleAssignTask(taskId);
+            });
+        }
+    }
+
     return card;
 }
 
@@ -794,6 +955,12 @@ async function showTask(taskId) {
 
     currentTaskId = numericId;
     console.log('Current task ID set to:', currentTaskId);
+
+    // Сохраняем projectId для kanban режима
+    if (viewMode === 'kanban' && kanbanSelectedProjectId) {
+        currentProjectId = kanbanSelectedProjectId;
+    }
+
     stopChatPolling();
 
     // Hide project view, show task view
@@ -869,16 +1036,51 @@ async function showTask(taskId) {
 
             // Load users
             const usersList = document.getElementById('task-users');
-            if (task.users && task.users.length > 0) {
-                usersList.innerHTML = '';
-                task.users.forEach(user => {
-                    const userBadge = document.createElement('span');
-                    userBadge.className = 'user-badge';
-                    userBadge.textContent = user.full_name || user.email || 'Unknown';
-                    usersList.appendChild(userBadge);
+            const currentUserId = getCurrentUserId();
+            const taskUsers = task.users || task.Users || [];
+            const isUserAssigned = taskUsers.some(u => (u.id || u.ID) === currentUserId);
+
+            if (usersList) {
+                if (taskUsers.length > 0) {
+                    usersList.innerHTML = '';
+                    taskUsers.forEach(user => {
+                        const userBadge = document.createElement('span');
+                        userBadge.className = 'user-badge';
+                        userBadge.textContent = user.full_name || user.FullName || user.email || 'Unknown';
+                        usersList.appendChild(userBadge);
+                    });
+                } else {
+                    usersList.innerHTML = '<span class="empty-state">Нет участников</span>';
+                }
+            }
+
+            // Add assign/unassign button for non-admin users
+            const taskActions = document.getElementById('task-actions');
+            if (taskActions && !isAdmin) {
+                // Remove existing assign button if any
+                const existingAssignBtn = document.getElementById('assign-task-btn');
+                if (existingAssignBtn) {
+                    existingAssignBtn.remove();
+                }
+
+                const assignBtn = document.createElement('button');
+                assignBtn.id = 'assign-task-btn';
+                assignBtn.className = 'btn btn-primary';
+                assignBtn.textContent = isUserAssigned ? 'Снять задачу' : 'Взять задачу';
+                assignBtn.style.marginTop = '10px';
+                assignBtn.addEventListener('click', () => {
+                    if (isUserAssigned) {
+                        handleUnassignTask(currentTaskId);
+                    } else {
+                        handleAssignTask(currentTaskId);
+                    }
                 });
-            } else {
-                usersList.innerHTML = '<span class="empty-state">Нет участников</span>';
+
+                // Insert before task actions or at the end of task info
+                const taskInfo = document.getElementById('task-info');
+                if (taskInfo) {
+                    taskInfo.appendChild(assignBtn);
+                }
             }
 
             const chatInputContainer = document.getElementById('chat-input-container');
@@ -1199,6 +1401,223 @@ function stopChatPolling() {
 
 // ==================== Utility Functions ====================
 
+// ==================== Kanban Board Functions ====================
+
+function toggleViewMode() {
+    viewMode = viewMode === 'list' ? 'kanban' : 'list';
+    const toggleBtn = document.getElementById('view-mode-toggle');
+
+    if (viewMode === 'kanban') {
+        toggleBtn.textContent = 'Список';
+        showKanbanView();
+    } else {
+        toggleBtn.textContent = 'Kanban';
+        showListView();
+    }
+}
+
+function showKanbanView() {
+    document.getElementById('projects-view').style.display = 'none';
+    document.getElementById('project-view').style.display = 'none';
+    document.getElementById('task-view').style.display = 'none';
+    document.getElementById('kanban-view').style.display = 'block';
+
+    // Если есть выбранный проект, загружаем его задачи
+    if (kanbanSelectedProjectId) {
+        loadKanbanTasks(kanbanSelectedProjectId);
+    } else {
+        loadKanbanProjects();
+    }
+}
+
+function showListView() {
+    document.getElementById('kanban-view').style.display = 'none';
+    document.getElementById('project-view').style.display = 'none';
+    document.getElementById('task-view').style.display = 'none';
+    document.getElementById('projects-view').style.display = 'block';
+
+    loadProjects();
+}
+
+async function loadKanbanProjects() {
+    const projectsList = document.getElementById('kanban-projects-list');
+    projectsList.innerHTML = '<div class="loading">Загрузка проектов...</div>';
+
+    try {
+        const response = await projectsAPI.getProjects();
+        if (!response.ok) {
+            projectsList.innerHTML = '<div class="empty-state"><p>Ошибка при загрузке проектов</p></div>';
+            return;
+        }
+
+        const projects = await response.json();
+        projectsList.innerHTML = '';
+
+        if (Array.isArray(projects) && projects.length > 0) {
+            projects.forEach(project => {
+                const projectItem = createKanbanProjectItem(project);
+                projectsList.appendChild(projectItem);
+            });
+        } else {
+            projectsList.innerHTML = '<div class="empty-state"><p>Проекты не найдены</p></div>';
+        }
+    } catch (error) {
+        console.error('Error loading kanban projects:', error);
+        projectsList.innerHTML = '<div class="empty-state"><p>Ошибка соединения с сервером</p></div>';
+    }
+}
+
+function createKanbanProjectItem(project) {
+    const projectId = project.id || project.ID;
+    const projectTitle = project.title || project.Title || 'Без названия';
+    const projectDescription = project.description || project.Description || '';
+
+    const item = document.createElement('div');
+    item.className = 'kanban-project-item';
+    if (kanbanSelectedProjectId === projectId) {
+        item.classList.add('active');
+    }
+
+    item.innerHTML = `
+        <h4>${escapeHtml(projectTitle)}</h4>
+        <p>${escapeHtml(projectDescription)}</p>
+    `;
+
+    item.addEventListener('click', () => {
+        kanbanSelectedProjectId = projectId;
+        loadKanbanTasks(projectId);
+
+        // Update active state
+        document.querySelectorAll('.kanban-project-item').forEach(el => {
+            el.classList.remove('active');
+        });
+        item.classList.add('active');
+    });
+
+    return item;
+}
+
+async function loadKanbanTasks(projectId) {
+    if (!projectId) return;
+
+    // Clear all columns
+    document.getElementById('kanban-todo-tasks').innerHTML = '<div class="loading">Загрузка...</div>';
+    document.getElementById('kanban-in-progress-tasks').innerHTML = '<div class="loading">Загрузка...</div>';
+    document.getElementById('kanban-done-tasks').innerHTML = '<div class="loading">Загрузка...</div>';
+
+    try {
+        const response = await tasksAPI.getTasks(projectId);
+        if (!response.ok) {
+            const errorText = await response.text();
+            console.error('Failed to load tasks:', errorText);
+            document.getElementById('kanban-todo-tasks').innerHTML = '<div class="empty-state"><p>Ошибка при загрузке задач</p></div>';
+            document.getElementById('kanban-in-progress-tasks').innerHTML = '';
+            document.getElementById('kanban-done-tasks').innerHTML = '';
+            return;
+        }
+
+        const tasks = await response.json();
+
+        // Group tasks by status
+        const todoTasks = [];
+        const inProgressTasks = [];
+        const doneTasks = [];
+
+        if (Array.isArray(tasks)) {
+            tasks.forEach(task => {
+                const status = (task.status || task.Status || 'todo').toLowerCase();
+                if (status === 'todo') {
+                    todoTasks.push(task);
+                } else if (status === 'in_progress' || status === 'in progress') {
+                    inProgressTasks.push(task);
+                } else if (status === 'done') {
+                    doneTasks.push(task);
+                }
+            });
+        }
+
+        // Render tasks
+        renderKanbanTasks('kanban-todo-tasks', todoTasks);
+        renderKanbanTasks('kanban-in-progress-tasks', inProgressTasks);
+        renderKanbanTasks('kanban-done-tasks', doneTasks);
+
+        // Update counts
+        document.getElementById('todo-count').textContent = todoTasks.length;
+        document.getElementById('in-progress-count').textContent = inProgressTasks.length;
+        document.getElementById('done-count').textContent = doneTasks.length;
+
+    } catch (error) {
+        console.error('Error loading kanban tasks:', error);
+        document.getElementById('kanban-todo-tasks').innerHTML = '<div class="empty-state"><p>Ошибка соединения с сервером</p></div>';
+        document.getElementById('kanban-in-progress-tasks').innerHTML = '';
+        document.getElementById('kanban-done-tasks').innerHTML = '';
+    }
+}
+
+function renderKanbanTasks(containerId, tasks) {
+    const container = document.getElementById(containerId);
+    container.innerHTML = '';
+
+    if (tasks.length === 0) {
+        container.innerHTML = '<div class="empty-column">Нет задач</div>';
+        return;
+    }
+
+    tasks.forEach(task => {
+        const taskCard = createKanbanTaskCard(task);
+        container.appendChild(taskCard);
+    });
+}
+
+function createKanbanTaskCard(task) {
+    const taskId = task.id || task.ID;
+    const taskTitle = task.title || task.Title || 'Без названия';
+    const taskDescription = task.description || task.Description || '';
+    const taskPriority = task.priority || task.Priority || 0;
+
+    // Remove exclamation marks from title (they're added by backend for display)
+    const cleanTitle = taskTitle.replace(/!+$/, '');
+
+    const card = document.createElement('div');
+    card.className = `kanban-task-card priority-${taskPriority}`;
+    card.dataset.taskId = taskId;
+
+    let priorityText = 'Обычная';
+    if (taskPriority === 1) {
+        priorityText = 'Важно';
+    } else if (taskPriority === 2) {
+        priorityText = 'Очень важно';
+    }
+
+    card.innerHTML = `
+        <h4>${escapeHtml(cleanTitle)}</h4>
+        ${taskDescription ? `<p>${escapeHtml(taskDescription)}</p>` : ''}
+        <div class="kanban-task-meta">
+            <span class="kanban-task-priority priority-${taskPriority}">${escapeHtml(priorityText)}</span>
+        </div>
+    `;
+
+    card.addEventListener('click', () => {
+        // Open task in detail view but keep kanban mode
+        const projectId = task.project_id || task.projectId || kanbanSelectedProjectId;
+        if (projectId) {
+            kanbanSelectedProjectId = projectId;
+            currentProjectId = projectId;
+        }
+        showTask(taskId);
+    });
+
+    return card;
+}
+
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+// ==================== Utility Functions ====================
+
 // Функция для получения текущих фильтров задач
 function getTaskFilters() {
     const filters = {};
@@ -1257,6 +1676,26 @@ function updateAdminUI() {
     if (createBtn) {
         createBtn.style.display = isAdmin ? 'block' : 'none';
     }
+
+    const manageTeamsBtn = document.getElementById('manage-teams-btn');
+    if (manageTeamsBtn) {
+        manageTeamsBtn.style.display = isAdmin ? 'block' : 'none';
+    }
+}
+
+function getCurrentUserId() {
+    const token = localStorage.getItem('token');
+    if (!token) {
+        return null;
+    }
+
+    try {
+        const payload = JSON.parse(atob(token.split('.')[1]));
+        return payload.user_id || payload.userId || null;
+    } catch (error) {
+        console.error('Error decoding token:', error);
+        return null;
+    }
 }
 
 // ==================== Project Creation Functions ====================
@@ -1279,8 +1718,25 @@ async function handleCreateProject(e) {
         const data = await response.json();
 
         if (response.ok) {
+            const projectId = data.id || data.ID;
+
+            // Get selected teams
+            const teamCheckboxes = document.querySelectorAll('#create-project-teams-checkboxes input[type="checkbox"]:checked');
+            const selectedTeamIds = Array.from(teamCheckboxes).map(cb => parseInt(cb.value));
+
+            // Assign teams to project
+            if (selectedTeamIds.length > 0 && projectId) {
+                for (const teamId of selectedTeamIds) {
+                    try {
+                        await teamsAPI.updateTeam(teamId, null, null, projectId, null);
+                    } catch (error) {
+                        console.error('Error assigning team to project:', error);
+                    }
+                }
+            }
+
             // Закрываем модальное окно
-            document.getElementById('create-project-modal').style.display = 'none';
+            document.getElementById('create-project-modal').classList.remove('show');
             document.getElementById('create-project-form').reset();
 
             // Обновляем список проектов
@@ -1294,13 +1750,14 @@ async function handleCreateProject(e) {
     }
 }
 
-function openCreateProjectModal() {
-    document.getElementById('create-project-modal').style.display = 'flex';
+async function openCreateProjectModal() {
+    document.getElementById('create-project-modal').classList.add('show');
     document.getElementById('project-title-input').focus();
+    await loadTeamsForProjectForm();
 }
 
 function closeCreateProjectModal() {
-    document.getElementById('create-project-modal').style.display = 'none';
+    document.getElementById('create-project-modal').classList.remove('show');
     document.getElementById('create-project-form').reset();
     clearErrors();
 }
@@ -1554,12 +2011,12 @@ async function handleDeleteTask() {
 }
 
 function openCreateTaskModal() {
-    document.getElementById('create-task-modal').style.display = 'flex';
+    document.getElementById('create-task-modal').classList.add('show');
     document.getElementById('task-title-input').focus();
 }
 
 function closeCreateTaskModal() {
-    document.getElementById('create-task-modal').style.display = 'none';
+    document.getElementById('create-task-modal').classList.remove('show');
     document.getElementById('create-task-form').reset();
     clearErrors();
 }
@@ -1710,11 +2167,20 @@ function getStatusClass(status) {
 function backToProjects() {
     currentProjectId = null;
     currentTaskId = null;
+    kanbanSelectedProjectId = null;
     stopChatPolling();
-    document.getElementById('project-view').style.display = 'none';
-    document.getElementById('task-view').style.display = 'none';
-    document.getElementById('projects-view').style.display = 'block';
-    loadProjects();
+
+    if (viewMode === 'kanban') {
+        document.getElementById('project-view').style.display = 'none';
+        document.getElementById('task-view').style.display = 'none';
+        showKanbanView();
+        loadKanbanProjects();
+    } else {
+        document.getElementById('project-view').style.display = 'none';
+        document.getElementById('task-view').style.display = 'none';
+        document.getElementById('projects-view').style.display = 'block';
+        loadProjects();
+    }
 }
 
 function backToProject() {
@@ -1861,6 +2327,563 @@ async function loadReports(projectId) {
 
 // ==================== Event Listeners ====================
 
+// ==================== Teams Functions ====================
+
+async function loadTeams() {
+    try {
+        const response = await teamsAPI.listTeams();
+        if (!response.ok) {
+            console.error('Failed to load teams');
+            return;
+        }
+        const teams = await response.json();
+        const teamsList = document.getElementById('teams-list');
+        if (!teamsList) return;
+
+        teamsList.innerHTML = '';
+        if (teams.length === 0) {
+            teamsList.innerHTML = '<p>Нет команд</p>';
+            return;
+        }
+
+        teams.forEach(team => {
+            const teamCard = document.createElement('div');
+            teamCard.className = 'project-card';
+            teamCard.innerHTML = `
+                <h3>${escapeHtml(team.name || team.Name || 'Без названия')}</h3>
+                <p>ID: ${team.id || team.ID}</p>
+                <p>Проект ID: ${team.project_id || team.ProjectID || 'Не назначен'}</p>
+                <p>Лидер ID: ${team.user_id || team.UserID || 'Не назначен'}</p>
+                <p>Участников: ${(team.user_ids || team.UserIDs || []).length}</p>
+                <div style="margin-top: 10px;">
+                    <button class="btn btn-secondary edit-team-btn" data-team-id="${team.id || team.ID}">Редактировать</button>
+                    <button class="btn btn-danger delete-team-btn" data-team-id="${team.id || team.ID}">Удалить</button>
+                </div>
+            `;
+            teamsList.appendChild(teamCard);
+        });
+
+        // Add event listeners
+        document.querySelectorAll('.edit-team-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const teamId = e.target.getAttribute('data-team-id');
+                openEditTeamModal(parseInt(teamId));
+            });
+        });
+
+        document.querySelectorAll('.delete-team-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const teamId = e.target.getAttribute('data-team-id');
+                handleDeleteTeam(parseInt(teamId));
+            });
+        });
+    } catch (error) {
+        console.error('Error loading teams:', error);
+    }
+}
+
+async function openManageTeamsModal() {
+    const modal = document.getElementById('manage-teams-modal');
+    if (modal) {
+        modal.classList.add('show');
+        await loadTeams();
+    }
+}
+
+function closeManageTeamsModal() {
+    const modal = document.getElementById('manage-teams-modal');
+    if (modal) {
+        modal.classList.remove('show');
+    }
+}
+
+async function openCreateTeamModal() {
+    const modal = document.getElementById('team-modal');
+    const title = document.getElementById('team-modal-title');
+    if (title) title.textContent = 'Создать команду';
+
+    // Reset form
+    document.getElementById('team-form').reset();
+    document.getElementById('team-error').textContent = '';
+
+    // Load users
+    await loadUsersForTeamForm();
+
+    // Load projects
+    await loadProjectsForTeamForm();
+
+    if (modal) {
+        modal.classList.add('show');
+    }
+}
+
+async function openEditTeamModal(teamId) {
+    const modal = document.getElementById('team-modal');
+    const title = document.getElementById('team-modal-title');
+    if (title) title.textContent = 'Редактировать команду';
+
+    try {
+        const response = await teamsAPI.getTeamById(teamId);
+        if (!response.ok) {
+            alert('Ошибка при загрузке команды');
+            return;
+        }
+        const team = await response.json();
+
+        // Fill form
+        document.getElementById('team-name-input').value = team.name || team.Name || '';
+        document.getElementById('team-lead-input').value = team.user_id || team.UserID || '';
+
+        // Load users and projects
+        await loadUsersForTeamForm();
+        await loadProjectsForTeamForm();
+
+        document.getElementById('team-project-input').value = team.project_id || team.ProjectID || '';
+
+        // Set selected users
+        const userIds = team.user_ids || team.UserIDs || [];
+        userIds.forEach(userId => {
+            const checkbox = document.querySelector(`input[type="checkbox"][value="${userId}"]`);
+            if (checkbox) checkbox.checked = true;
+        });
+
+        // Store team ID for update
+        document.getElementById('team-form').setAttribute('data-team-id', teamId);
+
+        if (modal) {
+            modal.classList.add('show');
+        }
+    } catch (error) {
+        console.error('Error loading team:', error);
+        alert('Ошибка при загрузке команды');
+    }
+}
+
+function closeTeamModal() {
+    const modal = document.getElementById('team-modal');
+    if (modal) {
+        modal.classList.remove('show');
+        document.getElementById('team-form').removeAttribute('data-team-id');
+    }
+}
+
+async function loadUsersForTeamForm() {
+    try {
+        const response = await usersAPI.listUsers();
+        if (!response.ok) {
+            console.error('Failed to load users');
+            return;
+        }
+        const users = await response.json();
+
+        const leadSelect = document.getElementById('team-lead-input');
+        const usersCheckboxes = document.getElementById('team-users-checkboxes');
+
+        if (leadSelect) {
+            leadSelect.innerHTML = '<option value="">Выберите лидера</option>';
+            users.forEach(user => {
+                const option = document.createElement('option');
+                option.value = user.id || user.ID;
+                option.textContent = user.full_name || user.FullName || `User ${user.id || user.ID}`;
+                leadSelect.appendChild(option);
+            });
+        }
+
+        if (usersCheckboxes) {
+            usersCheckboxes.innerHTML = '';
+            users.forEach(user => {
+                const label = document.createElement('label');
+                label.style.display = 'block';
+                label.style.marginBottom = '5px';
+                const checkbox = document.createElement('input');
+                checkbox.type = 'checkbox';
+                checkbox.value = user.id || user.ID;
+                checkbox.style.width = '12px';
+                checkbox.style.marginRight = '8px';
+                checkbox.style.cursor = 'pointer';
+                label.appendChild(checkbox);
+                label.appendChild(document.createTextNode(' ' + (user.full_name || user.FullName || `User ${user.id || user.ID}`)));
+                usersCheckboxes.appendChild(label);
+            });
+        }
+    } catch (error) {
+        console.error('Error loading users:', error);
+    }
+}
+
+async function loadProjectsForTeamForm() {
+    try {
+        const response = await projectsAPI.getProjects();
+        if (!response.ok) {
+            console.error('Failed to load projects');
+            return;
+        }
+        const projects = await response.json();
+
+        const projectSelect = document.getElementById('team-project-input');
+        if (projectSelect) {
+            projectSelect.innerHTML = '<option value="">Без проекта</option>';
+            projects.forEach(project => {
+                const option = document.createElement('option');
+                option.value = project.id || project.ID;
+                option.textContent = project.title || project.Title || `Project ${project.id || project.ID}`;
+                projectSelect.appendChild(option);
+            });
+        }
+    } catch (error) {
+        console.error('Error loading projects:', error);
+    }
+}
+
+async function handleTeamFormSubmit(e) {
+    e.preventDefault();
+    const errorDiv = document.getElementById('team-error');
+    errorDiv.textContent = '';
+
+    const name = document.getElementById('team-name-input').value;
+    const userId = parseInt(document.getElementById('team-lead-input').value);
+    const projectId = document.getElementById('team-project-input').value ? parseInt(document.getElementById('team-project-input').value) : null;
+
+    const checkboxes = document.querySelectorAll('#team-users-checkboxes input[type="checkbox"]:checked');
+    const userIds = Array.from(checkboxes).map(cb => parseInt(cb.value));
+
+    if (!name || !userId) {
+        errorDiv.textContent = 'Заполните все обязательные поля';
+        return;
+    }
+
+    try {
+        const teamId = document.getElementById('team-form').getAttribute('data-team-id');
+        let response;
+
+        if (teamId) {
+            // Update
+            response = await teamsAPI.updateTeam(parseInt(teamId), name, userId, projectId, userIds);
+        } else {
+            // Create
+            response = await teamsAPI.createTeam(name, userId, projectId, userIds);
+        }
+
+        if (!response.ok) {
+            const error = await response.json();
+            errorDiv.textContent = error.error || 'Ошибка при сохранении команды';
+            return;
+        }
+
+        closeTeamModal();
+        await loadTeams();
+        showSuccess('team-error', 'Команда успешно сохранена');
+    } catch (error) {
+        console.error('Error saving team:', error);
+        errorDiv.textContent = 'Ошибка при сохранении команды';
+    }
+}
+
+async function handleDeleteTeam(teamId) {
+    if (!confirm('Вы уверены, что хотите удалить эту команду?')) {
+        return;
+    }
+
+    try {
+        const response = await teamsAPI.deleteTeam(teamId);
+        if (!response.ok) {
+            const error = await response.json();
+            alert(error.error || 'Ошибка при удалении команды');
+            return;
+        }
+
+        await loadTeams();
+    } catch (error) {
+        console.error('Error deleting team:', error);
+        alert('Ошибка при удалении команды');
+    }
+}
+
+// ==================== Task Assignment Functions ====================
+
+async function handleAssignTask(taskId) {
+    try {
+        // Check if user is in a team assigned to the project
+        if (!currentProjectId) {
+            // Get task to find project
+            const taskResponse = await tasksAPI.getTaskById(taskId);
+            if (!taskResponse.ok) {
+                alert('Ошибка при получении задачи');
+                return;
+            }
+            const task = await taskResponse.json();
+            currentProjectId = task.project_id || task.ProjectID;
+        }
+
+        if (!currentProjectId) {
+            alert('Не удалось определить проект задачи');
+            return;
+        }
+
+        // Get teams for project
+        const teamsResponse = await teamsAPI.getTeamsByProject(currentProjectId);
+        if (!teamsResponse.ok) {
+            alert('Ошибка при проверке команд проекта');
+            return;
+        }
+
+        const teams = await teamsResponse.json();
+        const currentUserId = getCurrentUserId();
+
+        // Check if user is in any team assigned to this project
+        let userInTeam = false;
+        for (const team of teams) {
+            const userIds = team.user_ids || team.UserIDs || [];
+            if (userIds.includes(currentUserId)) {
+                userInTeam = true;
+                break;
+            }
+        }
+
+        if (!userInTeam) {
+            alert('Вы не можете принять эту задачу. Вы должны быть участником команды, привязанной к проекту.');
+            return;
+        }
+
+        const response = await tasksAPI.assignTask(taskId);
+        if (!response.ok) {
+            const error = await response.json();
+            alert(error.error || 'Ошибка при назначении задачи');
+            return;
+        }
+
+        // Reload task
+        if (currentTaskId === taskId) {
+            await showTask(taskId);
+        }
+
+        // Reload project tasks if in project view
+        if (currentProjectId) {
+            await showProject(currentProjectId);
+        }
+
+        showSuccess('task-error', 'Задача успешно назначена');
+    } catch (error) {
+        console.error('Error assigning task:', error);
+        alert('Ошибка при назначении задачи');
+    }
+}
+
+async function handleUnassignTask(taskId) {
+    try {
+        const response = await tasksAPI.unassignTask(taskId);
+        if (!response.ok) {
+            const error = await response.json();
+            alert(error.error || 'Ошибка при снятии задачи');
+            return;
+        }
+
+        // Reload task
+        if (currentTaskId === taskId) {
+            await showTask(taskId);
+        }
+
+        // Reload project tasks if in project view
+        if (currentProjectId) {
+            await showProject(currentProjectId);
+        }
+
+        showSuccess('task-error', 'Задача успешно снята');
+    } catch (error) {
+        console.error('Error unassigning task:', error);
+        alert('Ошибка при снятии задачи');
+    }
+}
+
+// ==================== Teams for Project Form ====================
+
+// ==================== Project Teams Management ====================
+
+async function openManageProjectTeamsModal() {
+    if (!currentProjectId) {
+        alert('Проект не выбран');
+        return;
+    }
+
+    const modal = document.getElementById('manage-project-teams-modal');
+    if (modal) {
+        modal.classList.add('show');
+        await loadProjectTeamsForManagement();
+    }
+}
+
+function closeManageProjectTeamsModal() {
+    const modal = document.getElementById('manage-project-teams-modal');
+    if (modal) {
+        modal.classList.remove('show');
+    }
+}
+
+async function loadProjectTeamsForManagement() {
+    try {
+        // Load all teams
+        const allTeamsResponse = await teamsAPI.listTeams();
+        if (!allTeamsResponse.ok) {
+            console.error('Failed to load teams');
+            const checkboxes = document.getElementById('project-teams-checkboxes');
+            if (checkboxes) {
+                checkboxes.innerHTML = '<p style="color: #de350b;">Ошибка при загрузке команд</p>';
+            }
+            return;
+        }
+        const allTeams = await allTeamsResponse.json();
+
+        // Load teams assigned to this project
+        const projectTeamsResponse = await teamsAPI.getTeamsByProject(currentProjectId);
+        let projectTeamIds = [];
+        if (projectTeamsResponse.ok) {
+            const projectTeams = await projectTeamsResponse.json();
+            projectTeamIds = projectTeams.map(t => t.id || t.ID);
+        }
+
+        const checkboxes = document.getElementById('project-teams-checkboxes');
+        if (checkboxes) {
+            if (allTeams.length === 0) {
+                checkboxes.innerHTML = '<p style="color: #5e6c84; font-size: 14px;">Нет созданных команд</p>';
+                return;
+            }
+
+            checkboxes.innerHTML = '';
+            allTeams.forEach(team => {
+                const label = document.createElement('label');
+                label.style.display = 'flex';
+                label.style.alignItems = 'center';
+                label.style.marginBottom = '8px';
+                label.style.cursor = 'pointer';
+                const checkbox = document.createElement('input');
+                checkbox.type = 'checkbox';
+                checkbox.value = team.id || team.ID;
+                checkbox.checked = projectTeamIds.includes(team.id || team.ID);
+                checkbox.style.width = '12px';
+                checkbox.style.marginRight = '8px';
+                checkbox.style.cursor = 'pointer';
+                label.appendChild(checkbox);
+                label.appendChild(document.createTextNode(team.name || team.Name || `Team ${team.id || team.ID}`));
+                checkboxes.appendChild(label);
+            });
+        }
+    } catch (error) {
+        console.error('Error loading teams:', error);
+        const checkboxes = document.getElementById('project-teams-checkboxes');
+        if (checkboxes) {
+            checkboxes.innerHTML = '<p style="color: #de350b;">Ошибка при загрузке команд</p>';
+        }
+    }
+}
+
+async function handleManageProjectTeamsSubmit(e) {
+    e.preventDefault();
+    const errorDiv = document.getElementById('manage-project-teams-error');
+    errorDiv.textContent = '';
+
+    if (!currentProjectId) {
+        errorDiv.textContent = 'Проект не выбран';
+        return;
+    }
+
+    try {
+        // Get selected teams
+        const teamCheckboxes = document.querySelectorAll('#project-teams-checkboxes input[type="checkbox"]:checked');
+        const selectedTeamIds = Array.from(teamCheckboxes).map(cb => parseInt(cb.value));
+
+        // Get all teams to find which ones need to be unassigned
+        const allTeamsResponse = await teamsAPI.listTeams();
+        if (!allTeamsResponse.ok) {
+            errorDiv.textContent = 'Ошибка при загрузке команд';
+            return;
+        }
+        const allTeams = await allTeamsResponse.json();
+
+        // Get current project teams
+        const projectTeamsResponse = await teamsAPI.getTeamsByProject(currentProjectId);
+        let currentTeamIds = [];
+        if (projectTeamsResponse.ok) {
+            const projectTeams = await projectTeamsResponse.json();
+            currentTeamIds = projectTeams.map(t => t.id || t.ID);
+        }
+
+        // Assign new teams
+        for (const teamId of selectedTeamIds) {
+            if (!currentTeamIds.includes(teamId)) {
+                try {
+                    await teamsAPI.updateTeam(teamId, null, null, currentProjectId, null);
+                } catch (error) {
+                    console.error('Error assigning team to project:', error);
+                }
+            }
+        }
+
+        // Unassign teams that were deselected
+        for (const teamId of currentTeamIds) {
+            if (!selectedTeamIds.includes(teamId)) {
+                try {
+                    await teamsAPI.updateTeam(teamId, null, null, null, null);
+                } catch (error) {
+                    console.error('Error unassigning team from project:', error);
+                }
+            }
+        }
+
+        closeManageProjectTeamsModal();
+        showSuccess('manage-project-teams-error', 'Команды проекта успешно обновлены');
+    } catch (error) {
+        console.error('Error managing project teams:', error);
+        errorDiv.textContent = 'Ошибка при сохранении команд проекта';
+    }
+}
+
+async function loadTeamsForProjectForm() {
+    try {
+        const response = await teamsAPI.listTeams();
+        if (!response.ok) {
+            console.error('Failed to load teams');
+            const checkboxes = document.getElementById('create-project-teams-checkboxes');
+            if (checkboxes) {
+                checkboxes.innerHTML = '<p style="color: #de350b;">Ошибка при загрузке команд</p>';
+            }
+            return;
+        }
+        const teams = await response.json();
+
+        const checkboxes = document.getElementById('create-project-teams-checkboxes');
+        if (checkboxes) {
+            if (teams.length === 0) {
+                checkboxes.innerHTML = '<p style="color: #5e6c84; font-size: 14px;">Нет созданных команд</p>';
+                return;
+            }
+
+            checkboxes.innerHTML = '';
+            teams.forEach(team => {
+                const label = document.createElement('label');
+                label.style.display = 'flex';
+                label.style.alignItems = 'center';
+                label.style.marginBottom = '8px';
+                label.style.cursor = 'pointer';
+                const checkbox = document.createElement('input');
+                checkbox.type = 'checkbox';
+                checkbox.value = team.id || team.ID;
+                checkbox.style.width = '12px';
+                checkbox.style.marginRight = '8px';
+                checkbox.style.cursor = 'pointer';
+                label.appendChild(checkbox);
+                label.appendChild(document.createTextNode(team.name || team.Name || `Team ${team.id || team.ID}`));
+                checkboxes.appendChild(label);
+            });
+        }
+    } catch (error) {
+        console.error('Error loading teams:', error);
+        const checkboxes = document.getElementById('create-project-teams-checkboxes');
+        if (checkboxes) {
+            checkboxes.innerHTML = '<p style="color: #de350b;">Ошибка при загрузке команд</p>';
+        }
+    }
+}
+
 document.addEventListener('DOMContentLoaded', () => {
     // Check if user is already logged in
     const token = localStorage.getItem('token');
@@ -1903,6 +2926,85 @@ document.addEventListener('DOMContentLoaded', () => {
     // Logout
     document.getElementById('logout-btn').addEventListener('click', handleLogout);
 
+    // Teams management
+    const manageTeamsBtn = document.getElementById('manage-teams-btn');
+    if (manageTeamsBtn) {
+        manageTeamsBtn.addEventListener('click', openManageTeamsModal);
+    }
+
+    const createTeamBtn = document.getElementById('create-team-btn');
+    if (createTeamBtn) {
+        createTeamBtn.addEventListener('click', openCreateTeamModal);
+    }
+
+    const closeManageTeamsModal = document.getElementById('close-manage-teams-modal');
+    if (closeManageTeamsModal) {
+        closeManageTeamsModal.addEventListener('click', () => {
+            document.getElementById('manage-teams-modal').style.display = 'none';
+        });
+    }
+
+    const closeTeamModal = document.getElementById('close-team-modal');
+    if (closeTeamModal) {
+        closeTeamModal.addEventListener('click', () => {
+            document.getElementById('team-modal').style.display = 'none';
+        });
+    }
+
+    const cancelTeamForm = document.getElementById('cancel-team-form');
+    if (cancelTeamForm) {
+        cancelTeamForm.addEventListener('click', closeTeamModal);
+    }
+
+    const teamForm = document.getElementById('team-form');
+    if (teamForm) {
+        teamForm.addEventListener('submit', handleTeamFormSubmit);
+    }
+
+    // Close modals on outside click
+    const manageTeamsModal = document.getElementById('manage-teams-modal');
+    if (manageTeamsModal) {
+        manageTeamsModal.addEventListener('click', (e) => {
+            if (e.target.id === 'manage-teams-modal') {
+                closeManageTeamsModal();
+            }
+        });
+    }
+
+    const teamModal = document.getElementById('team-modal');
+    if (teamModal) {
+        teamModal.addEventListener('click', (e) => {
+            if (e.target.id === 'team-modal') {
+                closeTeamModal();
+            }
+        });
+    }
+
+    // Close create project modal
+    const closeCreateModal = document.getElementById('close-create-modal');
+    if (closeCreateModal) {
+        closeCreateModal.addEventListener('click', () => {
+            document.getElementById('create-project-modal').classList.remove('show');
+        });
+    }
+
+    const cancelCreateProject = document.getElementById('cancel-create-project');
+    if (cancelCreateProject) {
+        cancelCreateProject.addEventListener('click', () => {
+            document.getElementById('create-project-modal').classList.remove('show');
+        });
+    }
+
+    // Close create project modal on outside click
+    const createProjectModal = document.getElementById('create-project-modal');
+    if (createProjectModal) {
+        createProjectModal.addEventListener('click', (e) => {
+            if (e.target.id === 'create-project-modal') {
+                createProjectModal.classList.remove('show');
+            }
+        });
+    }
+
     // Navigation
     document.getElementById('back-to-projects').addEventListener('click', backToProjects);
     document.getElementById('back-to-project').addEventListener('click', backToProject);
@@ -1941,6 +3043,37 @@ document.addEventListener('DOMContentLoaded', () => {
         deleteProjectBtn.addEventListener('click', handleDeleteProject);
     }
 
+    // Manage project teams handlers
+    const manageProjectTeamsBtn = document.getElementById('manage-project-teams-btn');
+    if (manageProjectTeamsBtn) {
+        manageProjectTeamsBtn.addEventListener('click', openManageProjectTeamsModal);
+    }
+
+    const closeManageProjectTeamsModalBtn = document.getElementById('close-manage-project-teams-modal');
+    if (closeManageProjectTeamsModalBtn) {
+        closeManageProjectTeamsModalBtn.addEventListener('click', closeManageProjectTeamsModal);
+    }
+
+    const cancelManageProjectTeams = document.getElementById('cancel-manage-project-teams');
+    if (cancelManageProjectTeams) {
+        cancelManageProjectTeams.addEventListener('click', closeManageProjectTeamsModal);
+    }
+
+    const manageProjectTeamsForm = document.getElementById('manage-project-teams-form');
+    if (manageProjectTeamsForm) {
+        manageProjectTeamsForm.addEventListener('submit', handleManageProjectTeamsSubmit);
+    }
+
+    // Close manage project teams modal on outside click
+    const manageProjectTeamsModal = document.getElementById('manage-project-teams-modal');
+    if (manageProjectTeamsModal) {
+        manageProjectTeamsModal.addEventListener('click', (e) => {
+            if (e.target.id === 'manage-project-teams-modal') {
+                closeManageProjectTeamsModal();
+            }
+        });
+    }
+
     // Create task handlers
     const createTaskBtn = document.getElementById('create-task-btn');
     if (createTaskBtn) {
@@ -1948,11 +3081,14 @@ document.addEventListener('DOMContentLoaded', () => {
         document.getElementById('create-task-form').addEventListener('submit', handleCreateTask);
         document.getElementById('close-create-task-modal').addEventListener('click', closeCreateTaskModal);
         document.getElementById('cancel-create-task').addEventListener('click', closeCreateTaskModal);
-        document.getElementById('create-task-modal').addEventListener('click', (e) => {
-            if (e.target.id === 'create-task-modal') {
-                closeCreateTaskModal();
-            }
-        });
+        const createTaskModal = document.getElementById('create-task-modal');
+        if (createTaskModal) {
+            createTaskModal.addEventListener('click', (e) => {
+                if (e.target.id === 'create-task-modal') {
+                    closeCreateTaskModal();
+                }
+            });
+        }
     }
 
     // Edit task handlers
@@ -1992,6 +3128,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (deleteTaskBtn) {
         deleteTaskBtn.addEventListener('click', handleDeleteTask);
+    }
+
+    // View mode toggle
+    const viewModeToggle = document.getElementById('view-mode-toggle');
+    if (viewModeToggle) {
+        viewModeToggle.addEventListener('click', toggleViewMode);
     }
 
     // Task filters handlers

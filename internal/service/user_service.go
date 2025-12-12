@@ -16,6 +16,7 @@ type UserService interface {
 	UpdateUser(id uint, req models.UserUpdateReq, currentUser models.User) error
 	checkUserPermission(currentUser, targetUser models.User) error
 	DeleteUser(id uint, currentUser models.User) error
+	ListUsers() ([]models.UserResponse, error)
 }
 
 type userService struct {
@@ -141,3 +142,29 @@ func (s *userService) DeleteUser(id uint, currentUser models.User) error {
 	return nil
 }
 
+func (s *userService) ListUsers() ([]models.UserResponse, error) {
+	users, err := s.repo.ListUsers()
+	if err != nil {
+		s.logger.Error("ListUsers failed", "err", err)
+		return nil, err
+	}
+
+	var responses []models.UserResponse
+	for _, user := range users {
+		_, taskIDs, err := s.repo.GetUserByID(user.ID)
+		if err != nil {
+			s.logger.Warn("ListUsers: failed to get task IDs", "user_id", user.ID, "err", err)
+			taskIDs = []uint{}
+		}
+
+		responses = append(responses, models.UserResponse{
+			ID:       user.ID,
+			FullName: user.FullName,
+			IsAdmin:  user.IsAdmin,
+			TaskIDs:  taskIDs,
+		})
+	}
+
+	s.logger.Info("ListUsers success", "count", len(responses))
+	return responses, nil
+}
