@@ -129,8 +129,17 @@ func (s *taskService) UpdateTask(id uint, req models.TaskUpdateReq) error {
 			return errors.New("the number of users exceeds the allowed limit")
 		}
 
+		// Очищаем название от восклицательных знаков перед сохранением
+		// Восклицательные знаки добавляются только при отображении в buildTaskResponse
+		var cleanTitle *string
+		if req.Title != nil {
+			// Убираем все восклицательные знаки из конца названия
+			cleaned := strings.TrimRight(*req.Title, "!")
+			cleanTitle = &cleaned
+		}
+
 		updateReq := models.TaskUpdateReq{
-			Title:       req.Title,
+			Title:       cleanTitle,
 			Description: req.Description,
 			Status:      req.Status,
 			Users:       req.Users,

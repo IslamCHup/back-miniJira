@@ -9,6 +9,7 @@ let chatPollInterval = null;
 let isAdmin = false;
 const userCache = {}; // Кэш для пользователей
 let currentTaskData = null; // Храним исходные данные текущей задачи
+let originalTaskStatus = null; // Храним исходный статус задачи для сравнения
 
 // ==================== API Functions ====================
 
@@ -120,12 +121,39 @@ const projectsAPI = {
 
 // Tasks API
 const tasksAPI = {
-    async getTasks(projectId = null) {
+    async getTasks(projectId = null, filters = {}) {
         const token = localStorage.getItem('token');
         let url = `${API_BASE_URL}/tasks/`;
+        const params = [];
+
         if (projectId) {
-            url += `?project_id=${projectId}`;
+            params.push(`project_id=${projectId}`);
         }
+
+        // Добавляем фильтры как query параметры
+        if (filters.status) {
+            params.push(`status=${encodeURIComponent(filters.status)}`);
+        }
+        if (filters.user_id) {
+            params.push(`user_id=${filters.user_id}`);
+        }
+        if (filters.search) {
+            params.push(`search=${encodeURIComponent(filters.search)}`);
+        }
+        if (filters.priority !== undefined && filters.priority !== null && filters.priority !== '') {
+            params.push(`priority=${filters.priority}`);
+        }
+        if (filters.sort_by) {
+            params.push(`sort_by=${encodeURIComponent(filters.sort_by)}`);
+        }
+        if (filters.sort_order) {
+            params.push(`sort_order=${encodeURIComponent(filters.sort_order)}`);
+        }
+
+        if (params.length > 0) {
+            url += '?' + params.join('&');
+        }
+
         const response = await fetch(url, {
             method: 'GET',
             headers: {
@@ -655,9 +683,10 @@ async function showProject(projectId) {
             console.log('Set status to:', status);
         }
 
-        // Load project tasks
+        // Load project tasks with filters
         console.log('Fetching tasks for project ID:', projectId);
-        const tasksResponse = await tasksAPI.getTasks(projectId);
+        const taskFilters = getTaskFilters();
+        const tasksResponse = await tasksAPI.getTasks(projectId, taskFilters);
         console.log('Tasks response status:', tasksResponse.status, tasksResponse.ok);
 
         const tasksList = document.getElementById('project-tasks-list');
@@ -794,6 +823,15 @@ async function showTask(taskId) {
         if (response.ok) {
             // Сохраняем исходные данные задачи для редактирования
             currentTaskData = task;
+
+            // Сохраняем исходный статус задачи для сравнения при редактировании
+            if (task.status || task.Status) {
+                let taskStatus = (task.status || task.Status).toLowerCase();
+                if (taskStatus === 'in progress' || taskStatus === 'in-progress') {
+                    taskStatus = 'in_progress';
+                }
+                originalTaskStatus = taskStatus;
+            }
 
             document.getElementById('task-title').textContent = task.title || task.Title || 'Без названия';
             document.getElementById('task-description').textContent = task.description || task.Description || 'Нет описания';
@@ -1161,6 +1199,39 @@ function stopChatPolling() {
 
 // ==================== Utility Functions ====================
 
+// Функция для получения текущих фильтров задач
+function getTaskFilters() {
+    const filters = {};
+
+    const statusEl = document.getElementById('filter-status');
+    const priorityEl = document.getElementById('filter-priority');
+    const sortByEl = document.getElementById('filter-sort-by');
+    const sortOrderEl = document.getElementById('filter-sort-order');
+    const searchEl = document.getElementById('filter-search');
+
+    if (statusEl && statusEl.value) {
+        filters.status = statusEl.value;
+    }
+
+    if (priorityEl && priorityEl.value !== '') {
+        filters.priority = parseInt(priorityEl.value);
+    }
+
+    if (sortByEl && sortByEl.value) {
+        filters.sort_by = sortByEl.value;
+    }
+
+    if (sortOrderEl && sortOrderEl.value) {
+        filters.sort_order = sortOrderEl.value;
+    }
+
+    if (searchEl && searchEl.value.trim()) {
+        filters.search = searchEl.value.trim();
+    }
+
+    return filters;
+}
+
 // ==================== Admin Functions ====================
 
 function checkAdminStatus() {
@@ -1374,19 +1445,36 @@ async function handleEditTask(e) {
         return;
     }
 
-    const title = titleInput.value.trim();
+    // Очищаем название от восклицательных знаков перед отправкой
+    // Восклицательные знаки добавляются только при отображении в бэке
+    let titleValue = titleInput.value.trim();
+    // Убираем все восклицательные знаки из конца названия
+    titleValue = titleValue.replace(/!+$/, '');
+
     const description = descriptionInput ? descriptionInput.value.trim() : '';
-    const status = statusInput.value;
+    const newStatus = statusInput.value;
     const priority = priorityInput ? (parseInt(priorityInput.value) || 0) : 0;
 
-    if (!title) {
+    if (!titleValue) {
         showError('edit-task-error', 'Название задачи обязательно');
         return;
     }
 
+    // Проверяем, изменился ли статус. Если нет - не отправляем его
+    let statusToSend = null;
+    if (originalTaskStatus !== null && newStatus !== originalTaskStatus) {
+        statusToSend = newStatus;
+        console.log('Status changed:', { from: originalTaskStatus, to: newStatus });
+    } else if (originalTaskStatus === null) {
+        // Если исходный статус не был сохранен, отправляем новый (для обратной совместимости)
+        statusToSend = newStatus;
+    } else {
+        console.log('Status unchanged, not sending status field');
+    }
+
     try {
-        console.log('Updating task:', { id: currentTaskId, title, description, status, priority });
-        const response = await tasksAPI.updateTask(currentTaskId, title, description, status, priority);
+        console.log('Updating task:', { id: currentTaskId, title: titleValue, description, status: statusToSend, priority });
+        const response = await tasksAPI.updateTask(currentTaskId, titleValue, description, statusToSend, priority);
         console.log('Update task response status:', response.status, response.ok);
 
         if (!response.ok) {
@@ -1422,6 +1510,12 @@ async function handleEditTask(e) {
 
         const data = await response.json().catch(() => ({}));
         console.log('Task updated successfully:', data);
+
+        // Обновляем исходный статус после успешного обновления
+        if (statusToSend !== null) {
+            originalTaskStatus = statusToSend;
+        }
+
         closeEditTaskModal();
         showTask(currentTaskId); // Перезагружаем задачу
     } catch (error) {
@@ -1500,6 +1594,9 @@ function openEditTaskModal() {
         statusValue = 'in_progress';
     }
 
+    // Сохраняем исходный статус для сравнения при сохранении
+    originalTaskStatus = statusValue;
+
     // Преобразуем приоритет - сначала пытаемся взять из data-атрибута
     let priorityValue = 0;
     if (taskPriorityEl) {
@@ -1573,7 +1670,8 @@ function openEditTaskModal() {
         description: taskDescription,
         status: statusValue,
         priority: priorityValue,
-        allowedTransitions: allowedStatuses
+        allowedTransitions: allowedStatuses,
+        originalStatus: originalTaskStatus
     });
 
     const editTaskModal = document.getElementById('edit-task-modal');
@@ -1894,6 +1992,71 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (deleteTaskBtn) {
         deleteTaskBtn.addEventListener('click', handleDeleteTask);
+    }
+
+    // Task filters handlers
+    const filterStatus = document.getElementById('filter-status');
+    const filterPriority = document.getElementById('filter-priority');
+    const filterSortBy = document.getElementById('filter-sort-by');
+    const filterSortOrder = document.getElementById('filter-sort-order');
+    const filterSearch = document.getElementById('filter-search');
+    const clearFiltersBtn = document.getElementById('clear-filters');
+
+    if (filterStatus) {
+        filterStatus.addEventListener('change', () => {
+            if (currentProjectId) {
+                showProject(currentProjectId);
+            }
+        });
+    }
+
+    if (filterPriority) {
+        filterPriority.addEventListener('change', () => {
+            if (currentProjectId) {
+                showProject(currentProjectId);
+            }
+        });
+    }
+
+    if (filterSortBy) {
+        filterSortBy.addEventListener('change', () => {
+            if (currentProjectId) {
+                showProject(currentProjectId);
+            }
+        });
+    }
+
+    if (filterSortOrder) {
+        filterSortOrder.addEventListener('change', () => {
+            if (currentProjectId) {
+                showProject(currentProjectId);
+            }
+        });
+    }
+
+    if (filterSearch) {
+        let searchTimeout;
+        filterSearch.addEventListener('input', () => {
+            clearTimeout(searchTimeout);
+            searchTimeout = setTimeout(() => {
+                if (currentProjectId) {
+                    showProject(currentProjectId);
+                }
+            }, 500); // Debounce search
+        });
+    }
+
+    if (clearFiltersBtn) {
+        clearFiltersBtn.addEventListener('click', () => {
+            if (filterStatus) filterStatus.value = '';
+            if (filterPriority) filterPriority.value = '';
+            if (filterSortBy) filterSortBy.value = '';
+            if (filterSortOrder) filterSortOrder.value = 'asc';
+            if (filterSearch) filterSearch.value = '';
+            if (currentProjectId) {
+                showProject(currentProjectId);
+            }
+        });
     }
 });
 
