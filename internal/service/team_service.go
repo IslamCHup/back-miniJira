@@ -13,6 +13,8 @@ type TeamService interface {
 	Update(id uint, req models.TeamUpdateReq, currentUser models.User) error
 	Delete(id uint, currentUser models.User) error
 	GetByID(id uint) (*models.TeamResponse, error)
+	ListTeams() ([]models.TeamResponse, error)
+	GetTeamsByProjectID(projectID uint) ([]models.TeamResponse, error)
 }
 
 type teamService struct {
@@ -186,4 +188,60 @@ func (s *teamService) GetByID(id uint) (*models.TeamResponse, error) {
 
 	s.logger.Info("GetTeamByID success", "team_id", id)
 	return resp, nil
+}
+
+func (s *teamService) ListTeams() ([]models.TeamResponse, error) {
+	teams, err := s.repo.ListTeams()
+	if err != nil {
+		s.logger.Error("ListTeams failed", "err", err)
+		return nil, err
+	}
+
+	var responses []models.TeamResponse
+	for _, team := range teams {
+		_, userIDs, err := s.repo.GetTeamByID(team.ID)
+		if err != nil {
+			s.logger.Warn("ListTeams: failed to get user IDs", "team_id", team.ID, "err", err)
+			userIDs = []uint{}
+		}
+
+		responses = append(responses, models.TeamResponse{
+			ID:        team.ID,
+			Name:      team.Name,
+			ProjectID: team.ProjectID,
+			UserID:    team.UserID,
+			UserIDs:   userIDs,
+		})
+	}
+
+	s.logger.Info("ListTeams success", "count", len(responses))
+	return responses, nil
+}
+
+func (s *teamService) GetTeamsByProjectID(projectID uint) ([]models.TeamResponse, error) {
+	teams, err := s.repo.GetTeamsByProjectID(projectID)
+	if err != nil {
+		s.logger.Error("GetTeamsByProjectID failed", "project_id", projectID, "err", err)
+		return nil, err
+	}
+
+	var responses []models.TeamResponse
+	for _, team := range teams {
+		_, userIDs, err := s.repo.GetTeamByID(team.ID)
+		if err != nil {
+			s.logger.Warn("GetTeamsByProjectID: failed to get user IDs", "team_id", team.ID, "err", err)
+			userIDs = []uint{}
+		}
+
+		responses = append(responses, models.TeamResponse{
+			ID:        team.ID,
+			Name:      team.Name,
+			ProjectID: team.ProjectID,
+			UserID:    team.UserID,
+			UserIDs:   userIDs,
+		})
+	}
+
+	s.logger.Info("GetTeamsByProjectID success", "project_id", projectID, "count", len(responses))
+	return responses, nil
 }

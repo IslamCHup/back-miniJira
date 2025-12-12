@@ -33,11 +33,18 @@ func (h *TeamHandler) RegisterRoutes(r *gin.Engine, authService service.AuthServ
 	adminTeams := r.Group("/admin/teams")
 	adminTeams.Use(middleware.AuthMiddleware(authService), middleware.RequireAdmin())
 	{
+		adminTeams.POST("/", h.Create)
+		adminTeams.GET("/", h.ListTeams)
 		adminTeams.DELETE("/:id", h.Delete)
 	}
 
+	// Get teams by project
+	authProjects := r.Group("/projects")
+	authProjects.Use(middleware.AuthMiddleware(authService))
+	{
+		authProjects.GET("/:id/teams", h.GetTeamsByProject)
+	}
 }
-
 
 func (h *TeamHandler) Create(c *gin.Context) {
 	var req models.TeamCreateReq
@@ -108,5 +115,31 @@ func (h *TeamHandler) GetByID(c *gin.Context) {
 	}
 
 	h.logger.Info("GetTeamByID success", "team_id", teamID)
+	c.JSON(http.StatusOK, resp)
+}
+
+func (h *TeamHandler) ListTeams(c *gin.Context) {
+	resp, err := h.service.ListTeams()
+	if err != nil {
+		h.logger.Error("ListTeams failed", "err", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	h.logger.Info("ListTeams success", "count", len(resp))
+	c.JSON(http.StatusOK, resp)
+}
+
+func (h *TeamHandler) GetTeamsByProject(c *gin.Context) {
+	projectID, _ := strconv.Atoi(c.Param("id"))
+
+	resp, err := h.service.GetTeamsByProjectID(uint(projectID))
+	if err != nil {
+		h.logger.Error("GetTeamsByProjectID failed", "project_id", projectID, "err", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	h.logger.Info("GetTeamsByProjectID success", "project_id", projectID, "count", len(resp))
 	c.JSON(http.StatusOK, resp)
 }

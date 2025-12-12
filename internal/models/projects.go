@@ -10,7 +10,7 @@ type Project struct {
 	Status       string        `json:"status"`
 	TimeEnd      *time.Time    `json:"time_end"`
 	ChatMessages []ChatMessage `gorm:"polymorphic:Chatable"`
-	// Commands []Command `json:"command"`
+	Teams        []Team        `json:"teams"`
 }
 
 type ProjectCreateReq struct {
@@ -19,7 +19,7 @@ type ProjectCreateReq struct {
 	Tasks       *[]Task    `json:"tasks"`
 	Status      string     `json:"status"`
 	TimeEnd     *time.Time `json:"time_end"`
-	// Commands []Command `json:"command"`
+	Teams       []Team     `json:"teams"`
 }
 
 type ProjectUpdReq struct {
@@ -27,7 +27,7 @@ type ProjectUpdReq struct {
 	Description *string `json:"description"`
 	Tasks       *[]Task `json:"tasks"`
 	Status      *string `json:"status"`
-	// Commands []Command `json:"command"`
+	Teams       *[]Team `json:"teams"`
 }
 
 type ProjectCreateResponse struct {
@@ -36,7 +36,7 @@ type ProjectCreateResponse struct {
 	Description string    `json:"description"`
 	Status      string    `json:"status"`
 	TimeEnd     time.Time `json:"time_end"`
-	// Commands []Command `json:"command"`
+	Teams       []Team    `json:"teams"`
 }
 
 type ProjectFilter struct {

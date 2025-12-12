@@ -18,6 +18,8 @@ type TaskService interface {
 	DeleteTask(id uint) error
 	CreateTask(req *models.TaskCreateReq) error
 	UpdateTask(id uint, req models.TaskUpdateReq) error
+	AssignTaskToUser(taskID uint, userID uint) error
+	UnassignTaskFromUser(taskID uint, userID uint) error
 }
 
 type taskService struct {
@@ -181,11 +183,39 @@ func (s *taskService) UpdateTask(id uint, req models.TaskUpdateReq) error {
 				s.logger.Error("failed to get task for user update", "err", err)
 				return err
 			}
+
+			oldUsersCount := len(task.Users)
+			newUsersCount := len(*req.Users)
+
 			if err := tx.Model(&taskModel).Association("Users").Replace(req.Users); err != nil {
 				s.logger.Error("failed to update task users", "err", err)
 				return err
 			}
-			s.logger.Info("task users updated", "task_id", task.ID, "users_count", len(*req.Users))
+			s.logger.Info("task users updated", "task_id", task.ID, "old_count", oldUsersCount, "new_count", newUsersCount)
+
+			// Логика изменения статуса при назначении/снятии пользователя
+			// Если задача была "todo" и добавили пользователя - меняем на "in_progress"
+			// Если задача была "in_progress" и убрали всех пользователей - меняем на "todo"
+			if strings.ToLower(strings.TrimSpace(task.Status)) == "todo" && newUsersCount > 0 && oldUsersCount == 0 {
+				statusInProgress := "in_progress"
+				updateReq.Status = &statusInProgress
+				now := time.Now()
+				updateReq.StartTask = &now
+				s.logger.Info("task status changed to in_progress (user assigned)", "task_id", task.ID)
+			} else if strings.ToLower(strings.TrimSpace(task.Status)) == "in_progress" && newUsersCount == 0 && oldUsersCount > 0 {
+				statusTodo := "todo"
+				updateReq.Status = &statusTodo
+				updateReq.StartTask = nil
+				s.logger.Info("task status changed to todo (all users unassigned)", "task_id", task.ID)
+			}
+
+			// Если статус изменился, обновляем задачу еще раз
+			if updateReq.Status != nil {
+				if err := taskrepo.UpdateTask(task.ID, updateReq); err != nil {
+					s.logger.Error("failed to update task status after user change", "err", err)
+					return err
+				}
+			}
 		}
 
 		// Обновляем статус проекта на основе количества завершенных задач
@@ -292,4 +322,102 @@ func buildTaskResponse(task *models.Task) *models.TaskResponse {
 	}
 
 	return resp
+}
+
+func (s *taskService) AssignTaskToUser(taskID uint, userID uint) error {
+	return s.db.Transaction(func(tx *gorm.DB) error {
+		taskrepo := s.repo.WithDB(tx)
+
+		task, err := taskrepo.GetTaskByID(taskID)
+		if err != nil {
+			s.logger.Error("failed to get task", "task_id", taskID, "err", err)
+			return err
+		}
+
+		// Проверяем, не назначен ли уже пользователь
+		for _, user := range task.Users {
+			if user.ID == userID {
+				s.logger.Info("user already assigned to task", "task_id", taskID, "user_id", userID)
+				return nil // Уже назначен
+			}
+		}
+
+		// Добавляем пользователя
+		var user models.User
+		if err := tx.First(&user, userID).Error; err != nil {
+			s.logger.Error("failed to get user", "user_id", userID, "err", err)
+			return err
+		}
+
+		if err := tx.Model(task).Association("Users").Append(&user); err != nil {
+			s.logger.Error("failed to assign user to task", "err", err)
+			return err
+		}
+
+		// Если задача была "todo" и теперь есть пользователи - меняем на "in_progress"
+		if strings.ToLower(strings.TrimSpace(task.Status)) == "todo" {
+			statusInProgress := "in_progress"
+			updateReq := models.TaskUpdateReq{
+				Status: &statusInProgress,
+			}
+			now := time.Now()
+			updateReq.StartTask = &now
+
+			if err := taskrepo.UpdateTask(taskID, updateReq); err != nil {
+				s.logger.Error("failed to update task status", "err", err)
+				return err
+			}
+			s.logger.Info("task status changed to in_progress (user assigned)", "task_id", taskID, "user_id", userID)
+		}
+
+		return nil
+	})
+}
+
+func (s *taskService) UnassignTaskFromUser(taskID uint, userID uint) error {
+	return s.db.Transaction(func(tx *gorm.DB) error {
+		taskrepo := s.repo.WithDB(tx)
+
+		task, err := taskrepo.GetTaskByID(taskID)
+		if err != nil {
+			s.logger.Error("failed to get task", "task_id", taskID, "err", err)
+			return err
+		}
+
+		// Удаляем пользователя
+		var user models.User
+		if err := tx.First(&user, userID).Error; err != nil {
+			s.logger.Error("failed to get user", "user_id", userID, "err", err)
+			return err
+		}
+
+		if err := tx.Model(task).Association("Users").Delete(&user); err != nil {
+			s.logger.Error("failed to unassign user from task", "err", err)
+			return err
+		}
+
+		// Перезагружаем задачу чтобы получить актуальный список пользователей
+		task, err = taskrepo.GetTaskByID(taskID)
+		if err != nil {
+			s.logger.Error("failed to reload task", "err", err)
+			return err
+		}
+
+		// Если задача была "in_progress" и больше нет пользователей - меняем на "todo"
+		if strings.ToLower(strings.TrimSpace(task.Status)) == "in_progress" && len(task.Users) == 0 {
+			statusTodo := "todo"
+			updateReq := models.TaskUpdateReq{
+				Status: &statusTodo,
+			}
+			updateReq.StartTask = nil
+
+			if err := taskrepo.UpdateTask(taskID, updateReq); err != nil {
+				s.logger.Error("failed to update task status", "err", err)
+				return err
+			}
+			s.logger.Info("task status changed to todo (all users unassigned)", "task_id", taskID, "user_id", userID)
+		}
+
+		return nil
+	})
 }

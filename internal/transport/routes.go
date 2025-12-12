@@ -18,6 +18,7 @@ func RegisterRoutes(
 	userService service.UserService,
 	authService service.AuthService,
 	userRepo repository.UserRepository,
+	teamService service.TeamService,
 ) {
 	taskHandler := NewTaskHandler(taskService, logger)
 	projectHandler := NewProjectHandler(projectService, logger)
@@ -25,13 +26,14 @@ func RegisterRoutes(
 	chatHandler := NewChatHandler(chatService, logger)
 	userHandler := NewUserHandler(userService, logger)
 	authHandler := NewAuthHandler(authService, logger)
-	
+	teamHandler := NewTeamHandler(teamService, logger)
 
-	chatHandler.SetupChatRoutes(router,authService)
-	reportHandler.RegisterRoutes(router,authService)
-	taskHandler.RegisterRoutes(router,authService)
-	projectHandler.RegisterRoutes(router,authService)
+	chatHandler.SetupChatRoutes(router, authService)
+	reportHandler.RegisterRoutes(router, authService)
+	taskHandler.RegisterRoutes(router, authService)
+	projectHandler.RegisterRoutes(router, authService)
 	userHandler.RegisterRoutes(router, authService)
 	authHandler.SetupRoutes(router)
-	
+	teamHandler.RegisterRoutes(router, authService)
+
 }

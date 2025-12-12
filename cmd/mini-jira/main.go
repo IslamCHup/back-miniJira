@@ -19,7 +19,7 @@ func main() {
 	db := config.SetUpDatabaseConnection(logger)
 
 	// db.Migrator().DropTable(&models.User{})
-	if err := db.AutoMigrate(&models.Project{}, &models.Task{}, &models.User{}, &models.ChatMessage{}); err != nil {
+	if err := db.AutoMigrate(&models.Project{}, &models.Task{}, &models.User{}, &models.ChatMessage{}, &models.Team{}); err != nil {
 		logger.Error("ошибка при выполнении автомиграции", "error", err)
 		panic(fmt.Sprintf("не удалось выполнит миграции:%v", err))
 	}
@@ -29,6 +29,7 @@ func main() {
 	userRepo := repository.NewUserRepository(db, logger)
 	reportRepo := repository.NewReportRepository(db, logger)
 	chatRepo := repository.NewChatRepositoryGorm(db)
+	teamRepo := repository.NewTeamRepository(db, logger)
 
 	projectService := service.NewProjectService(db, logger, projectRepo)
 	taskService := service.NewTaskService(db, logger, taskRepo, projectRepo)
@@ -36,13 +37,14 @@ func main() {
 	reportService := service.NewReportService(reportRepo, logger)
 	chatService := service.NewChatService(chatRepo, logger)
 	authService := service.NewAuthService(userRepo, logger)
+	teamService := service.NewTeamService(teamRepo, logger)
 	r := gin.Default()
 
 	// Добавляем CORS middleware
 	r.Use(middleware.CORS())
 
 	transport.RegisterRoutes(
-		r, logger, taskService, projectService, reportService, chatService, userService, authService, userRepo,
+		r, logger, taskService, projectService, reportService, chatService, userService, authService, userRepo, teamService,
 	)
 
 	logger.Info("Server running on :8080")
