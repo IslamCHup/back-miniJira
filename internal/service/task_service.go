@@ -103,7 +103,6 @@ func (s *taskService) UpdateTask(id uint, req models.TaskUpdateReq) error {
 
 		s.logger.Info("task found", "op", "service.task.UpdateTask", "task_id", task.ID, "current_status", task.Status)
 
-		//этого блого нет после ревью
 		allowedTransport := map[string][]string{
 			"todo":        {"in_progress"},
 			"in_progress": {"todo", "done"},
@@ -131,11 +130,8 @@ func (s *taskService) UpdateTask(id uint, req models.TaskUpdateReq) error {
 			return errors.New("the number of users exceeds the allowed limit")
 		}
 
-		// Очищаем название от восклицательных знаков перед сохранением
-		// Восклицательные знаки добавляются только при отображении в buildTaskResponse
 		var cleanTitle *string
 		if req.Title != nil {
-			// Убираем все восклицательные знаки из конца названия
 			cleaned := strings.TrimRight(*req.Title, "!")
 			cleanTitle = &cleaned
 		}
@@ -150,7 +146,6 @@ func (s *taskService) UpdateTask(id uint, req models.TaskUpdateReq) error {
 			FinishTask:  req.FinishTask,
 		}
 
-		// Управление временными метками в зависимости от изменения статуса
 		if req.Status != nil {
 			if newStatusTask == "in_progress" && !strings.EqualFold(oldStatusTask, "in_progress") {
 				now := time.Now()
@@ -176,7 +171,6 @@ func (s *taskService) UpdateTask(id uint, req models.TaskUpdateReq) error {
 			return err
 		}
 
-		// Обновляем связь с пользователями, если они переданы
 		if req.Users != nil {
 			var taskModel models.Task
 			if err := tx.First(&taskModel, task.ID).Error; err != nil {
@@ -193,9 +187,6 @@ func (s *taskService) UpdateTask(id uint, req models.TaskUpdateReq) error {
 			}
 			s.logger.Info("task users updated", "task_id", task.ID, "old_count", oldUsersCount, "new_count", newUsersCount)
 
-			// Логика изменения статуса при назначении/снятии пользователя
-			// Если задача была "todo" и добавили пользователя - меняем на "in_progress"
-			// Если задача была "in_progress" и убрали всех пользователей - меняем на "todo"
 			if strings.ToLower(strings.TrimSpace(task.Status)) == "todo" && newUsersCount > 0 && oldUsersCount == 0 {
 				statusInProgress := "in_progress"
 				updateReq.Status = &statusInProgress
@@ -208,8 +199,6 @@ func (s *taskService) UpdateTask(id uint, req models.TaskUpdateReq) error {
 				updateReq.StartTask = nil
 				s.logger.Info("task status changed to todo (all users unassigned)", "task_id", task.ID)
 			}
-
-			// Если статус изменился, обновляем задачу еще раз
 			if updateReq.Status != nil {
 				if err := taskrepo.UpdateTask(task.ID, updateReq); err != nil {
 					s.logger.Error("failed to update task status after user change", "err", err)
@@ -218,19 +207,15 @@ func (s *taskService) UpdateTask(id uint, req models.TaskUpdateReq) error {
 			}
 		}
 
-		// Обновляем статус проекта на основе количества завершенных задач
-		// Важно: подсчет происходит ПОСЛЕ обновления задачи, чтобы учесть новый статус
+
 		if req.Status != nil {
 			var doneTasksCount int64
 			var totalTasksCount int64
 
-			// Подсчитываем количество завершенных задач ПОСЛЕ обновления
-			// Теперь текущая задача уже имеет новый статус в БД
 			if err := tx.Model(&models.Task{}).
 				Where("project_id = ? AND status = ?", task.ProjectID, "done").
 				Count(&doneTasksCount).Error; err == nil {
 
-				// Подсчитываем общее количество задач в проекте
 				if err := tx.Model(&models.Task{}).
 					Where("project_id = ?", task.ProjectID).
 					Count(&totalTasksCount).Error; err == nil {
@@ -243,29 +228,22 @@ func (s *taskService) UpdateTask(id uint, req models.TaskUpdateReq) error {
 						"done_tasks", doneTasksCount, "total_tasks", totalTasksCount,
 						"new_task_status", newStatusTask)
 
-					// Если все задачи завершены, проект помечаем как done
 					if totalTasksCount > 0 && doneTasksCount == totalTasksCount {
 						newProjStatus.Status = &statusDone
 						s.logger.Info("all tasks done, setting project to done", "project_id", task.ProjectID)
 					} else if doneTasksCount == 0 {
-						// Если нет завершенных задач, проект в процессе
 						newProjStatus.Status = &statusInProgress
 						s.logger.Info("no tasks done, setting project to in_progress", "project_id", task.ProjectID)
 					} else if doneTasksCount > 0 && doneTasksCount < totalTasksCount {
-						// Если есть завершенные задачи, но не все - проект в процессе
 						newProjStatus.Status = &statusInProgress
 						s.logger.Info("some tasks done, setting project to in_progress", "project_id", task.ProjectID,
 							"done", doneTasksCount, "total", totalTasksCount)
 					}
 
 					if newProjStatus.Status != nil {
-						// Обновляем проект напрямую через репозиторий в транзакции
-						// Валидация статуса проекта пропускается, т.к. статус определяется автоматически
-						// на основе состояния задач
 						if err := projectRepo.UpdateProject(task.ProjectID, newProjStatus); err != nil {
 							s.logger.Error("failed to update project status", "project_id", task.ProjectID,
 								"new_status", *newProjStatus.Status, "err", err)
-							// Возвращаем ошибку, т.к. обновление статуса проекта важно
 							return err
 						} else {
 							s.logger.Info("project status updated successfully", "project_id", task.ProjectID,
@@ -334,7 +312,6 @@ func (s *taskService) AssignTaskToUser(taskID uint, userID uint) error {
 			return err
 		}
 
-		// Проверяем, не назначен ли уже пользователь
 		for _, user := range task.Users {
 			if user.ID == userID {
 				s.logger.Info("user already assigned to task", "task_id", taskID, "user_id", userID)
@@ -342,7 +319,6 @@ func (s *taskService) AssignTaskToUser(taskID uint, userID uint) error {
 			}
 		}
 
-		// Добавляем пользователя
 		var user models.User
 		if err := tx.First(&user, userID).Error; err != nil {
 			s.logger.Error("failed to get user", "user_id", userID, "err", err)
@@ -354,7 +330,6 @@ func (s *taskService) AssignTaskToUser(taskID uint, userID uint) error {
 			return err
 		}
 
-		// Если задача была "todo" и теперь есть пользователи - меняем на "in_progress"
 		if strings.ToLower(strings.TrimSpace(task.Status)) == "todo" {
 			statusInProgress := "in_progress"
 			updateReq := models.TaskUpdateReq{
@@ -384,7 +359,6 @@ func (s *taskService) UnassignTaskFromUser(taskID uint, userID uint) error {
 			return err
 		}
 
-		// Удаляем пользователя
 		var user models.User
 		if err := tx.First(&user, userID).Error; err != nil {
 			s.logger.Error("failed to get user", "user_id", userID, "err", err)
@@ -396,14 +370,12 @@ func (s *taskService) UnassignTaskFromUser(taskID uint, userID uint) error {
 			return err
 		}
 
-		// Перезагружаем задачу чтобы получить актуальный список пользователей
 		task, err = taskrepo.GetTaskByID(taskID)
 		if err != nil {
 			s.logger.Error("failed to reload task", "err", err)
 			return err
 		}
 
-		// Если задача была "in_progress" и больше нет пользователей - меняем на "todo"
 		if strings.ToLower(strings.TrimSpace(task.Status)) == "in_progress" && len(task.Users) == 0 {
 			statusTodo := "todo"
 			updateReq := models.TaskUpdateReq{
