@@ -68,7 +68,7 @@ make run
 bash -lc "set -e; echo 'Building backend...'; go mod download; mkdir -p bin; go build -o bin/back-miniJira ./...; echo 'Building frontend...'; cd frontend; (pnpm install || npm install || yarn install); cp .env.example .env 2>/dev/null || true; (pnpm build || npm run build || yarn build); echo 'Build finished'"
 ```
 
-### Makefile — быстрые команды
+### Makefile — быстрые команды для запуска
 
 ```bash
 
